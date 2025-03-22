@@ -177,7 +177,7 @@ def taboo_cells(warehouse):
     '''
     lines = str(warehouse).split('\n')
     wall_cells = set(warehouse.walls)
-    taboo_row_nullifier = set(warehouse.targets) | set(find_2D_iterator(lines, '*'))
+    taboo_row_nullifier = set(warehouse.targets) | set(find_2D_iterator(lines, '*')) | set(find_2D_iterator(lines, '#'))
     lines = [mark_outside_walls(line) for line in lines]
 
     candidate_taboo_cells = set(find_2D_iterator_exclude(lines, '.', '#', '*', '?'))
