@@ -224,10 +224,27 @@ class SokobanPuzzle(search.Problem):
         #self.weights = {box: weight for box, weight in zip(warehouse.boxes, warehouse.weights)}
         
         # each box represented as (x, y, weight) tuple
-        warehouse.boxes = [(box[0], box[1], weight) for box, weight in zip(warehouse.boxes, warehouse.weights)]
-        warehouse.boxes.sort(key=lambda b: (b[1], b[0]))
-        self.initial = (warehouse.worker, tuple(warehouse.boxes))
+        boxes_with_weights = [(box[0], box[1], weight) for box, weight in zip(warehouse.boxes, warehouse.weights)]
+        boxes_with_weights.sort(key=lambda b: (b[1], b[0]))
+        self.initial = (warehouse.worker, tuple(boxes_with_weights))
 
+        #get tabboo cells
+        taboo_map = taboo_cells(warehouse)
+        self.taboo_set = {
+            (j, i)
+            for i, line in enumerate(taboo_map.splitlines())
+            for j, ch in enumerate(line)
+            if ch == 'X'
+        }
+
+    def is_deadlock(self, state): #(unsolvable)
+        _, boxes = state
+        for (bx, by, _) in boxes:
+            if (bx, by) in self.taboo_set and (bx, by) not in self.targets:
+                return True
+        return False
+    
+    
     def actions(self, state):
         directions = ['Up', 'Down', 'Left', 'Right']
         (wx, wy), boxes = state
@@ -292,6 +309,9 @@ class SokobanPuzzle(search.Problem):
         return c + 1
   
     def h(self, node):
+        if self.is_deadlock(node.state):
+            return 10**6  # remove deadlocked states by assigning a high cost.
+        
         _, boxes = node.state
         return sum(min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets) for bx, by, _ in boxes)
 
