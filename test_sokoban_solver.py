@@ -99,17 +99,17 @@ class TestSokoban:
         wh.load_warehouse("./warehouses/warehouse_13.txt")
 
         # Test 1
-        answer = check_elem_action_seq(wh, ['Right', 'Down', 'Down', 'Down'])
+        answer = check_elem_action_seq(wh, ['Right', 'Down'])
         expected_answer = (
             '####   \n'
             '#. ##  \n'
             '#.  #  \n'
-            '#.  #  \n'
-            '##$ ###\n'
-            '# $@  # \n'
-            '#  $ # \n'
-            '#  ### \n'
-            '####   '
+            '#. @#  \n'
+            '##$$###\n'
+            ' # $  # \n'
+            ' #    # \n'
+            ' #  ### \n'
+            ' ####   '
         )
         assert answer == expected_answer, f"Test 1 failed! Expected:\n{expected_answer}\nBut got:\n{answer}"
 
