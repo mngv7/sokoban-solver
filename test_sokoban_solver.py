@@ -72,7 +72,7 @@ class TestSokoban:
         answer = taboo_cells(wh)
         assert answer == expected_answer
 
-    def test_check_elem_action_seq(self):
+    def test_check_elem_action_seq_wh_1(self):
         wh = Warehouse()
         wh.load_warehouse("./warehouses/warehouse_01.txt")
 
@@ -93,6 +93,55 @@ class TestSokoban:
         answer = check_elem_action_seq(wh, ['Right', 'Right', 'Right'])
         expected_answer = 'Impossible'
         assert answer == expected_answer, f"Test 2 failed! Expected: {expected_answer}, but got: {answer}"
+
+    def test_check_elem_action_seq_wh_13(self):
+        wh = Warehouse()
+        wh.load_warehouse("./warehouses/warehouse_13.txt")
+
+        # Test 1
+        answer = check_elem_action_seq(wh, ['Right', 'Down', 'Down', 'Down'])
+        expected_answer = (
+            '####   \n'
+            '#. ##  \n'
+            '#.  #  \n'
+            '#.  #  \n'
+            '##$ ###\n'
+            '# $@  # \n'
+            '#  $ # \n'
+            '#  ### \n'
+            '####   '
+        )
+        assert answer == expected_answer, f"Test 1 failed! Expected:\n{expected_answer}\nBut got:\n{answer}"
+
+        # Test 2
+        answer = check_elem_action_seq(wh, ['Down', 'Right', 'Right'])
+        expected_answer = 'Impossible'
+        assert answer == expected_answer, f"Test 2 failed! Expected: {expected_answer}, but got: {answer}"
+
+
+    def test_check_elem_action_seq_wh_125(self):
+        wh = Warehouse()
+        wh.load_warehouse("./warehouses/warehouse_125.txt")
+
+        # Test 1
+        answer = check_elem_action_seq(wh, ['Down', 'Left', 'Down', 'Left'])
+        expected_answer = (
+            '      #####  \n'
+            '      #   ## \n'
+            '      # $  # \n'
+            '######## # ##\n'
+            '# .  # $$   #\n'
+            '#       @ # #\n'
+            '#...#####$  #\n'
+            '#####   #####'
+        )
+        assert answer == expected_answer, f"Test 1 failed! Expected:\n{expected_answer}\nBut got:\n{answer}"
+
+        # Test 2
+        answer = check_elem_action_seq(wh, ['Down', 'Left', 'Left'])
+        expected_answer = 'Impossible'
+        assert answer == expected_answer, f"Test 2 failed! Expected: {expected_answer}, but got: {answer}"
+
 
 
     @pytest.mark.skip("Not implemented")
