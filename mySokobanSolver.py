@@ -262,8 +262,8 @@ def check_elem_action_seq(warehouse, action_seq):
     }
 
     worker_x, worker_y = warehouse_copy.worker
-    boxes = list(warehouse_copy.boxes)  
-    walls = list(warehouse_copy.walls)
+    boxes = set(warehouse_copy.boxes)  
+    walls = set(warehouse_copy.walls)
 
     for action in action_seq:
         if action not in moves:
