@@ -106,10 +106,10 @@ class TestSokoban:
             '#.  #  \n'
             '#. @#  \n'
             '##$$###\n'
-            ' # $  # \n'
-            ' #    # \n'
-            ' #  ### \n'
-            ' ####   '
+            ' # $  #\n'
+            ' #    #\n'
+            ' #  ###\n'
+            ' ####  '
         )
         assert answer == expected_answer, f"Test 1 failed! Expected:\n{expected_answer}\nBut got:\n{answer}"
 
