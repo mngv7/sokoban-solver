@@ -217,13 +217,104 @@ class SokobanPuzzle(search.Problem):
 
     
     def __init__(self, warehouse):
-        pass
-
-    def actions(self, state):
-        """
-        Return the list of actions that can be executed in the given state.
+        self.warehouse = warehouse
         
-        """
+        self.walls = set(warehouse.walls)
+        self.targets = set(warehouse.targets)
+        #self.weights = {box: weight for box, weight in zip(warehouse.boxes, warehouse.weights)}
+        
+        # each box represented as (x, y, weight) tuple
+        boxes_with_weights = [(box[0], box[1], weight) for box, weight in zip(warehouse.boxes, warehouse.weights)]
+        boxes_with_weights.sort(key=lambda b: (b[1], b[0]))
+        self.initial = (warehouse.worker, tuple(boxes_with_weights))
+
+        #get tabboo cells
+        taboo_map = taboo_cells(warehouse)
+        self.taboo_set = {
+            (j, i)
+            for i, line in enumerate(taboo_map.splitlines())
+            for j, ch in enumerate(line)
+            if ch == 'X'
+        }
+
+    def is_deadlock(self, state): #(unsolvable)
+        _, boxes = state
+        for (bx, by, _) in boxes:
+            if (bx, by) in self.taboo_set and (bx, by) not in self.targets:
+                return True
+        return False
+    
+    
+    def actions(self, state):
+        directions = ['Up', 'Down', 'Left', 'Right']
+        (wx, wy), boxes = state
+        boxes_xy = {(b[0], b[1]) for b in boxes} # extract (x,y) positions from boxes
+        actions = []
+        moves = {'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1)}
+        for action in directions:
+            dx, dy = moves[action]
+            nx, ny = wx + dx, wy + dy
+            if (nx, ny) in self.walls:
+                continue
+            if (nx, ny) in boxes_xy:
+                bnx, bny = nx + dx, ny + dy
+                if (bnx, bny) in boxes_xy or (bnx, bny) in self.walls:
+                    continue
+                actions.append(action)
+            else:
+                actions.append(action)
+        return actions
+    
+
+    def result(self, state, action):
+        (wx, wy), boxes = state
+        boxes = list(boxes)
+        dx, dy = {'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1)}[action]
+        new_worker = (wx + dx, wy + dy)
+        # if new_worker in boxes:
+        #     new_box = (new_worker[0] + dx, new_worker[1] + dy)
+        #     boxes.remove(new_worker)
+        #     boxes.append(new_box)
+
+        for i, (bx, by, w) in enumerate(boxes):
+            if (bx, by) == new_worker:
+                new_box = (bx + dx, by + dy, w)
+                boxes[i] = new_box
+                break
+        return (new_worker, tuple(sorted(boxes, key=lambda b: (b[1], b[0]))))
+        
+    def goal_test(self, state):
+        _, boxes = state
+        return all((b[0], b[1]) in self.targets for b in boxes)
+
+    def path_cost(self, c, state1, action, state2):
+        _, b1 = state1
+        _, b2 = state2
+        # moved_box = set(b2) - set(b1)
+        # if moved_box:
+        #     box = moved_box.pop()
+        #     weight = self.weights.get(box, 0)
+        #     return c + 1 + weight
+        
+        moved_box = None
+        b1_xy = {(b[0], b[1]): b for b in b1}
+        b2_xy = {(b[0], b[1]): b for b in b2}
+        # identify  box that moved by comparing positions:
+        for pos, box in b2_xy.items():
+            if pos not in b1_xy:
+                moved_box = box
+                break
+        if moved_box:
+            return c + 1 + moved_box[2]
+        return c + 1
+  
+    def h(self, node):
+        if self.is_deadlock(node.state):
+            return 10**6  # remove deadlocked states by assigning a high cost.
+        
+        _, boxes = node.state
+        return sum(min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets) for bx, by, _ in boxes)
+
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -320,6 +411,15 @@ def solve_weighted_sokoban(warehouse):
             C is the total cost of the action sequence C
 
     '''
+
+    problem = SokobanPuzzle(warehouse)
+    result = search.astar_graph_search(problem)
+    
+    if result is None:
+        return "Impossible", None
+    
+    return result.solution(), result.path_cost
+    
     
 
 

@@ -144,8 +144,8 @@ class TestSokoban:
 
 
 
-    @pytest.mark.skip("Not implemented")
-    def test_solve_weighted_sokoban():
+    # @pytest.mark.skip("Not implemented")
+    def test_solve_weighted_sokoban_wh8a(self):
         wh = Warehouse()    
         wh.load_warehouse( "./warehouses/warehouse_8a.txt")
         # first test
@@ -166,3 +166,130 @@ class TestSokoban:
             print('Your answer is different but it might still be correct')
             print('Check that you pushed the right box onto the left target!')
         print(f'Your cost = {cost}, expected cost = {expected_cost}')
+
+    def test_solve_weighted_sokoban_wh9(self):
+        wh = Warehouse()    
+        wh.load_warehouse( "./warehouses/warehouse_09.txt")
+        # first test
+        answer, cost = solve_weighted_sokoban(wh)
+
+        expected_answer = ['Up', 'Right', 'Right', 'Down', 'Up', 'Left', 'Left', 'Down', 'Right', 'Down', 'Right', 'Left', 'Up', 'Up', 'Right', 'Down', 'Right',
+                            'Down', 'Down', 'Left', 'Up', 'Right', 'Up', 'Left', 'Down', 'Left', 'Up', 'Right', 'Up', 'Left'] 
+        expected_cost = 396
+        print('<<  test_solve_weighted_sokoban >>')
+        if answer==expected_answer:
+            print(' Answer as expected!  :-)\n')
+        else:
+            print('unexpected answer!  :-(\n')
+            print('Expected ');print(expected_answer)
+            print('But, received ');print(answer)
+            print('Your answer is different but it might still be correct')
+            print('Check that you pushed the right box onto the left target!')
+        print(f'Your cost = {cost}, expected cost = {expected_cost}')
+
+    def test_solve_weighted_sokoban_wh47(self):
+        wh = Warehouse()    
+        wh.load_warehouse( "./warehouses/warehouse_47.txt")
+        # first test
+        answer, cost = solve_weighted_sokoban(wh)
+
+        expected_answer = ['Right', 'Right', 'Right', 'Up', 'Up', 'Up', 'Left', 'Left', 'Down', 'Right', 'Right', 'Down', 'Down', 'Left', 'Left', 'Left', 'Left', 'Up',
+                        'Up', 'Right', 'Right', 'Up', 'Right', 'Right', 'Right', 'Right', 'Down', 'Left', 'Up', 'Left', 'Down', 'Down', 'Up', 'Up', 'Left', 'Left',
+                        'Down', 'Left', 'Left', 'Down', 'Down', 'Right', 'Right', 'Right', 'Right', 'Right', 'Right', 'Down', 'Right', 'Right', 'Up', 'Left',
+                        'Left', 'Left', 'Left', 'Left', 'Left', 'Down', 'Left', 'Left', 'Up', 'Up', 'Up', 'Right', 'Right', 'Right', 'Up', 'Right', 'Down', 'Down',
+                        'Up', 'Left', 'Left', 'Left', 'Left', 'Down', 'Down', 'Down', 'Right', 'Right', 'Up', 'Right', 'Right', 'Left', 'Left', 'Down', 'Left',
+                        'Left', 'Up', 'Right', 'Right'] 
+        expected_cost = 179
+        print('<<  test_solve_weighted_sokoban >>')
+        if answer==expected_answer:
+            print(' Answer as expected!  :-)\n')
+        else:
+            print('unexpected answer!  :-(\n')
+            print('Expected ');print(expected_answer)
+            print('But, received ');print(answer)
+            print('Your answer is different but it might still be correct')
+            print('Check that you pushed the right box onto the left target!')
+        print(f'Your cost = {cost}, expected cost = {expected_cost}')
+
+    
+    #@pytest.mark.skip
+    def test_solve_weighted_sokoban_wh7(self):
+        wh = Warehouse()    
+        wh.load_warehouse( "./warehouses/warehouse_07.txt")
+        # first test
+        answer, cost = solve_weighted_sokoban(wh)
+
+        expected_answer = ['Up', 'Up', 'Right', 'Right', 'Up', 'Up', 'Left', 'Left', 'Down', 'Down', 'Right', 'Up', 'Down', 'Right', 'Down', 'Down', 'Left', 'Up',
+                            'Down', 'Left', 'Left', 'Up', 'Left', 'Up', 'Up', 'Right'] 
+        expected_cost = 26
+        print('<<  test_solve_weighted_sokoban >>')
+        if answer==expected_answer:
+            print(' Answer as expected!  :-)\n')
+        else:
+            print('unexpected answer!  :-(\n')
+            print('Expected ');print(expected_answer)
+            print('But, received ');print(answer)
+            print('Your answer is different but it might still be correct')
+            print('Check that you pushed the right box onto the left target!')
+        print(f'Your cost = {cost}, expected cost = {expected_cost}')
+
+    @pytest.mark.skip("takes ages to run")
+    def test_solve_weighted_sokoban_wh147(self):
+        wh = Warehouse()    
+        wh.load_warehouse( "./warehouses/warehouse_147.txt")
+        # first test
+        answer, cost = solve_weighted_sokoban(wh)
+
+        expected_answer = ['Left', 'Left', 'Left', 'Left', 'Left', 'Left', 'Down', 'Down', 'Down', 'Right', 'Right', 'Up', 'Right', 'Down', 'Right', 'Down',
+                            'Down', 'Left', 'Down', 'Left', 'Left', 'Up', 'Up', 'Down', 'Down', 'Right', 'Right', 'Up', 'Right', 'Up', 'Up', 'Left', 'Left', 'Left',
+                            'Down', 'Left', 'Up', 'Up', 'Up', 'Left', 'Up', 'Right', 'Right', 'Right', 'Right', 'Right', 'Right', 'Down', 'Right', 'Right', 'Right',
+                            'Up', 'Up', 'Left', 'Left', 'Down', 'Left', 'Left', 'Left', 'Left', 'Left', 'Left', 'Down', 'Down', 'Down', 'Right', 'Right', 'Up', 'Left',
+                            'Down', 'Left', 'Up', 'Up', 'Left', 'Up', 'Right', 'Right', 'Right', 'Right', 'Right', 'Right', 'Left', 'Left', 'Left', 'Left', 'Left', 'Down',
+                            'Down', 'Down', 'Down', 'Right', 'Down', 'Down', 'Right', 'Right', 'Up', 'Up', 'Right', 'Up', 'Left', 'Left', 'Left', 'Down', 'Left',
+                            'Up', 'Up', 'Up', 'Left', 'Up', 'Right', 'Right', 'Right', 'Right', 'Right', 'Down', 'Right', 'Down', 'Right', 'Right', 'Up', 'Left',
+                            'Right', 'Right', 'Up', 'Up', 'Left', 'Left', 'Down', 'Left', 'Left', 'Left', 'Left', 'Left', 'Left', 'Right', 'Right', 'Right', 'Right', 'Right',
+                            'Right', 'Up', 'Right', 'Right', 'Down', 'Down', 'Left', 'Down', 'Left', 'Left', 'Up', 'Right', 'Right', 'Down', 'Right', 'Up', 'Left',
+                            'Left', 'Up', 'Left', 'Left'] 
+        expected_cost = 521
+        print('<<  test_solve_weighted_sokoban >>')
+        if answer==expected_answer:
+            print(' Answer as expected!  :-)\n')
+        else:
+            print('unexpected answer!  :-(\n')
+            print('Expected ');print(expected_answer)
+            print('But, received ');print(answer)
+            print('Your answer is different but it might still be correct')
+            print('Check that you pushed the right box onto the left target!')
+        print(f'Your cost = {cost}, expected cost = {expected_cost}')
+
+
+
+    
+    
+    
+    
+    
+    
+    
+    @pytest.mark.skip("Not implemented")
+    def test_solve_weighted_sokoban_wh5n(self):
+        wh = Warehouse()    
+        wh.load_warehouse( "./warehouses/warehouse_5n.txt")
+        # first test
+        answer, cost = solve_weighted_sokoban(wh)
+
+        expected_answer = ['Impossible'] 
+        expected_cost = None
+        print('<<  test_solve_weighted_sokoban >>')
+        if answer==expected_answer:
+            print(' Answer as expected!  :-)\n')
+        else:
+            print('unexpected answer!  :-(\n')
+            print('Expected ');print(expected_answer)
+            print('But, received ');print(answer)
+            print('Your answer is different but it might still be correct')
+            print('Check that you pushed the right box onto the left target!')
+        print(f'Your cost = {cost}, expected cost = {expected_cost}')
+
+
+    
