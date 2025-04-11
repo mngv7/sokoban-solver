@@ -397,6 +397,8 @@ def best_first_graph_search(problem, f):
     if f is a heuristic estimate to the goal, then we have greedy best
     first search; if f is node.depth then we have breadth-first search.
     """
+    # append_count = 0
+    # logfile = open("log_new_run.txt", "w")  # clears log at start    
     node = Node(problem.initial)
     if problem.goal_test(node.state):
         return node
@@ -410,6 +412,8 @@ def best_first_graph_search(problem, f):
         explored.add(node.state)
         for child in node.expand(problem):
             if child.state not in explored and child not in frontier:
+                # append_count += 1
+                # logfile.write(f"Appending {child} to frontier {append_count}\n")
                 frontier.append(child)
             elif child in frontier:
                 # frontier[child] is the f value of the 
@@ -417,7 +421,10 @@ def best_first_graph_search(problem, f):
                 # the node child.  Read implementation of PriorityQueue
                 if f(child) < frontier[child]:
                     del frontier[child] # delete the incumbent node
+                    # append_count += 1
+                    # logfile.write(f"Appending {child} to frontier {append_count}\n")
                     frontier.append(child) # 
+    # logfile.close()
     return None
 
 

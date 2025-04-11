@@ -209,9 +209,25 @@ def get_reachable_positions(worker_pos, walls, boxes):
         return visited
 
 
+
 from itertools import combinations
+# from search import FIFOQueue
 
+# def get_reachable_positions(worker_pos, walls, boxes):
+#     frontier = FIFOQueue()         # Using FIFOQueue from the search module
+#     frontier.append(worker_pos)
+#     reached = set()
 
+#     while frontier:
+#         current = frontier.pop()
+#         if current in reached:
+#             continue
+#         reached.add(current)
+#         for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+#             neighbor = (current[0] + dx, current[1] + dy)
+#             if neighbor not in walls and neighbor not in boxes and neighbor not in reached:
+#                 frontier.append(neighbor)
+#     return reached
 
 
 class SokobanPuzzle(search.Problem):
@@ -290,11 +306,30 @@ class SokobanPuzzle(search.Problem):
                     return True
         return False
     
-    
+    # slows:
+    def boxes_reachable_from_targets(self, box_positions):
+        """
+        Check whether every box in box_positions is in a region that is
+        (statically) reachable from some target, ignoring boxes.
+        
+        This is done by computing a union of reachable cells (ignoring boxes)
+        starting from each target. If a box is not in the union, then it is not
+        possible to move that box onto any target.
+        """
+        reachable_from_targets = set()
+        for target in self.targets:
+            # Get the cells reachable from the target, considering walls only.
+            reachable_from_targets |= get_reachable_positions(target, self.walls, set())
+        return all(box in reachable_from_targets for box in box_positions)
+
 
     def is_deadlock(self, state):
         _, boxes = state
         box_positions = {(b[0], b[1]) for b in boxes}
+        
+        if not self.boxes_reachable_from_targets(box_positions):
+            return True
+        
         for (bx, by, _) in boxes:
             pos = (bx, by)
             if pos in self.taboo_set and pos not in self.targets:
@@ -330,7 +365,36 @@ class SokobanPuzzle(search.Problem):
                     actions.append(action)
         return actions
 
-    
+
+    # def actions(self, state):
+    #     directions = ['Up', 'Down', 'Left', 'Right']
+    #     (wx, wy), boxes = state
+    #     boxes_xy = {(b[0], b[1]) for b in boxes}
+    #     reachable = get_reachable_positions((wx, wy), self.walls, boxes_xy)
+    #     moves = {'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1)}
+    #     valid_actions = []
+
+    #     for action in directions:
+    #         dx, dy = moves[action]
+    #         nx, ny = wx + dx, wy + dy
+    #         if (nx, ny) in self.walls:
+    #             continue
+
+    #         if (nx, ny) in boxes_xy:
+    #             bnx, bny = nx + dx, ny + dy
+    #             if (bnx, bny) in self.walls or (bnx, bny) in boxes_xy:
+    #                 continue
+
+    #             reduced_boxes = boxes_xy - {(nx, ny)}
+    #             reachable_without_box = get_reachable_positions((wx, wy), self.walls, reduced_boxes)
+    #             if (nx, ny) in reachable_without_box:
+    #                 valid_actions.append(action)
+    #         else:
+    #             if (nx, ny) in reachable:
+    #                 valid_actions.append(action)
+
+    #     return valid_actions
+
 
     def result(self, state, action):
         (wx, wy), boxes = state
@@ -343,6 +407,22 @@ class SokobanPuzzle(search.Problem):
                 boxes[i] = new_box
                 break
         return (new_worker, tuple(sorted(boxes, key=lambda b: (b[1], b[0]))))
+
+    # def result(self, state, action):
+    #     (wx, wy), boxes = state
+    #     dx, dy = {'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1)}[action]
+    #     new_worker = (wx + dx, wy + dy)
+    #     boxes_xy = {(b[0], b[1]) for b in boxes}
+    #     if new_worker not in boxes_xy:
+    #         return (new_worker, boxes)
+
+    #     new_boxes = list(boxes)
+    #     for i, (bx, by, w) in enumerate(new_boxes):
+    #         if (bx, by) == new_worker:
+    #             new_boxes[i] = (bx + dx, by + dy, w)
+    #             break
+    #     return (new_worker, tuple(sorted(new_boxes, key=lambda b: (b[1], b[0]))))
+
         
     def goal_test(self, state):
         _, boxes = state
@@ -364,14 +444,39 @@ class SokobanPuzzle(search.Problem):
             return c + 1 + moved_box[2]
         return c + 1
   
+    # def h(self, node):
+    #     if self.is_deadlock(node.state):
+    #         return 10**6  # remove deadlocked states by assigning a high cost.
+        
+    #     _, boxes = node.state
+    #     #return sum(min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets) for bx, by, _ in boxes)
+    #     return sum(min(abs(bx - tx) + abs(by - ty) * (1 + weight * 0.8) for (tx, ty) in self.targets)
+    #                for bx, by, weight in boxes)
+
     def h(self, node):
         if self.is_deadlock(node.state):
-            return 10**6  # remove deadlocked states by assigning a high cost.
+            return 10**6  # high cost for deadlocked states
         
-        _, boxes = node.state
-        #return sum(min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets) for bx, by, _ in boxes)
-        return sum(min(abs(bx - tx) + abs(by - ty) * (1 + weight * 0.1) for (tx, ty) in self.targets)
-                   for bx, by, weight in boxes)
+        worker, boxes = node.state
+        
+        # Compute cost for boxes to reach some target.
+        box_cost = sum(
+            min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets)
+            for bx, by, weight in boxes
+        )
+        
+        # Compute extra cost based on how far the worker is from the closest box
+        # that is not already on a target.
+        candidate_boxes = [(bx, by) for bx, by, weight in boxes if (bx, by) not in self.targets]
+        if candidate_boxes:
+            worker_cost = min(abs(worker[0] - bx) + abs(worker[1] - by) for bx, by in candidate_boxes)
+        else:
+            worker_cost = 0
+        
+        # Tune the relative weight of worker positioning here:
+        return box_cost + worker_cost * 0.5
+
+
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -444,7 +549,7 @@ def check_elem_action_seq(warehouse, action_seq):
     
 
 
-
+# OLD TEST (REDO):  *************************************
 # def is_box_frozen(warehouse, box):
 #     x, y = box
 #     walls = warehouse.walls
@@ -472,39 +577,28 @@ def check_elem_action_seq(warehouse, action_seq):
 #                 return True
 #     return False
 
-
-
-
 # def is_initial_state_deadlocked(warehouse): # unsolvable check BEFORE search starts
 #     boxes = warehouse.boxes
 #     targets = warehouse.targets
 #     walls = warehouse.walls
 
-#     # 1. Too many boxes or targets mismatch
 #     if len(boxes) != len(targets):
 #         return True
 
-#     # 2. Taboo cell detection
 #     taboo_map_lines = taboo_cells(warehouse).splitlines()
 #     for (x, y) in boxes:
 #         if y < len(taboo_map_lines) and x < len(taboo_map_lines[y]):
 #             if taboo_map_lines[y][x] == 'X':
 #                 return True
 
-#     # 3. Frozen box detection
 #     for box in boxes:
 #         if is_box_frozen(warehouse, box):
 #             return True
 
-#     # 4. Box cluster check
 #     if has_blocked_box_clusters(warehouse):
 #         return True
 
 #     return False
-
-
-
-
 
 
 
@@ -533,6 +627,8 @@ def solve_weighted_sokoban(warehouse):
             C is the total cost of the action sequence C
 
     '''
+
+    # develop this initial check??:
     # if is_initial_state_deadlocked(warehouse):
     #     return ['Impossible'], None 
     
