@@ -260,11 +260,15 @@ class SokobanPuzzle(search.Problem):
         self.targets = set(warehouse.targets)
         #self.weights = {box: weight for box, weight in zip(warehouse.boxes, warehouse.weights)}
         self.visited_box_states = set()
+        self.deadlock_cache = {}
         
         # each box represented as (x, y, weight) tuple
         boxes_with_weights = [(box[0], box[1], weight) for box, weight in zip(warehouse.boxes, warehouse.weights)]
         boxes_with_weights.sort(key=lambda b: (b[1], b[0]))
         self.initial = (warehouse.worker, tuple(boxes_with_weights))
+
+        if not hasattr(self, '_seen_box_configs'):
+            self._seen_box_configs = set()
 
         #get tabboo cells
         taboo_map = taboo_cells(warehouse)
@@ -278,17 +282,19 @@ class SokobanPuzzle(search.Problem):
         
 
     def __eq__(self, other):
-        return isinstance(other, SokobanPuzzle) and self.initial[1] == other.initial[1]
+        # return isinstance(other, SokobanPuzzle) and self.initial[1] == other.initial[1]\
+        return isinstance(other, SokobanPuzzle) and self.initial == other.initial
 
     def __hash__(self):
-        return hash(self.initial[1])  # only hash box positions
+        return hash(self.initial)  # only hash box positions
 
 
     def is_box_blocked(self, box_positions, box):
             x, y = box
             walls = self.walls
-            boxes = box_positions.copy()
-            boxes.discard((x, y))
+            # boxes = box_positions.copy()
+            # boxes.discard((x, y))
+            boxes = set(box_positions) - {(x, y)}
             obstacles = walls.union(boxes)
 
             if ((x - 1, y) in obstacles and (x, y - 1) in obstacles): return True
@@ -307,49 +313,106 @@ class SokobanPuzzle(search.Problem):
         return False
     
     # slows:
-    def boxes_reachable_from_targets(self, box_positions):
-        """
-        Check whether every box in box_positions is in a region that is
-        (statically) reachable from some target, ignoring boxes.
+    # def boxes_reachable_from_targets(self, box_positions):
+    #     reachable_from_targets = set()
+    #     for target in self.targets:
+    #         # Get the cells reachable from the target, considering walls only.
+    #         reachable_from_targets |= get_reachable_positions(target, self.walls, set())
+    #     return all(box in reachable_from_targets for box in box_positions)
+
+
+    # def is_deadlock(self, state):
+    #     _, boxes = state
+    #     box_positions = {(b[0], b[1]) for b in boxes}
         
-        This is done by computing a union of reachable cells (ignoring boxes)
-        starting from each target. If a box is not in the union, then it is not
-        possible to move that box onto any target.
-        """
-        reachable_from_targets = set()
-        for target in self.targets:
-            # Get the cells reachable from the target, considering walls only.
-            reachable_from_targets |= get_reachable_positions(target, self.walls, set())
-        return all(box in reachable_from_targets for box in box_positions)
+    #     if not self.boxes_reachable_from_targets(box_positions):
+    #         return True
+        
+    #     for (bx, by, _) in boxes:
+    #         pos = (bx, by)
+    #         if pos in self.taboo_set and pos not in self.targets:
+    #             return True
+    #         if self.is_box_blocked(box_positions, pos):
+    #             return True
+    #     if self.has_frozen_clusters(box_positions):
+    #         return True
+    #     return False
 
+    # def is_deadlock(self, state):
+    #     _, boxes = state
+    #     box_positions = frozenset((b[0], b[1]) for b in boxes)
 
-    def is_deadlock(self, state):
+    #     if box_positions in self.deadlock_cache:
+    #         return self.deadlock_cache[box_positions]
+
+    #     result = (
+    #         #not self.boxes_reachable_from_targets(box_positions) or
+    #         any((bx, by) in self.taboo_set and (bx, by) not in self.targets for bx, by, _ in boxes) or
+    #         any(self.is_box_blocked(box_positions, (bx, by)) for bx, by, _ in boxes) or
+    #         self.has_frozen_clusters(box_positions)
+    #     )
+    #     self.deadlock_cache[box_positions] = result
+    #     return result
+
+    def is_taboo_deadlock(self, state):
         _, boxes = state
-        box_positions = {(b[0], b[1]) for b in boxes}
-        
-        if not self.boxes_reachable_from_targets(box_positions):
-            return True
-        
-        for (bx, by, _) in boxes:
-            pos = (bx, by)
-            if pos in self.taboo_set and pos not in self.targets:
+        for bx, by, _ in boxes:
+            if (bx, by) in self.taboo_set and (bx, by) not in self.targets:
                 return True
-            if self.is_box_blocked(box_positions, pos):
-                return True
-        if self.has_frozen_clusters(box_positions):
-            return True
         return False
     
+    def is_deadlock(self, state):
+        _, boxes = state
+        box_positions = frozenset((b[0], b[1]) for b in boxes)
+
+        if box_positions in self.deadlock_cache:
+            return self.deadlock_cache[box_positions]
+
+        # Check for taboo deadlock (fatal and cacheable)
+        if any((bx, by) in self.taboo_set and (bx, by) not in self.targets for bx, by, _ in boxes):
+            self.deadlock_cache[box_positions] = True
+            return True
+
+        # result = (
+        #     any((bx, by) in self.taboo_set and (bx, by) not in self.targets for bx, by, _ in boxes) or
+        #     any(self.is_box_blocked(box_positions, (bx, by)) for bx, by, _ in boxes) or
+        #     self.has_frozen_clusters(box_positions)
+        # )
+        
+
+        # self.deadlock_cache[box_positions] = result
+        # return result
+
+        # Don't cache soft deadlocks (they might change)
+        if any(self.is_box_blocked(box_positions, (bx, by)) for bx, by, _ in boxes):
+            return True
+
+        if self.has_frozen_clusters(box_positions):
+            return True
+
+        return False
+
+
+
+
 
     def actions(self, state):
+        if self.is_taboo_deadlock(state) and state != self.initial:
+            return []
+        
+        
+        
         directions = ['Up', 'Down', 'Left', 'Right']
         (wx, wy), boxes = state
         boxes_xy = {(b[0], b[1]) for b in boxes}
         reachable = get_reachable_positions((wx, wy), self.walls, boxes_xy)
+        self.last_reachable_cache = reachable 
         moves = {'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1)}
         actions = []
 
         for action in directions:
+            
+            
             dx, dy = moves[action]
             nx, ny = wx + dx, wy + dy
             if (nx, ny) in self.walls:
@@ -366,34 +429,6 @@ class SokobanPuzzle(search.Problem):
         return actions
 
 
-    # def actions(self, state):
-    #     directions = ['Up', 'Down', 'Left', 'Right']
-    #     (wx, wy), boxes = state
-    #     boxes_xy = {(b[0], b[1]) for b in boxes}
-    #     reachable = get_reachable_positions((wx, wy), self.walls, boxes_xy)
-    #     moves = {'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1)}
-    #     valid_actions = []
-
-    #     for action in directions:
-    #         dx, dy = moves[action]
-    #         nx, ny = wx + dx, wy + dy
-    #         if (nx, ny) in self.walls:
-    #             continue
-
-    #         if (nx, ny) in boxes_xy:
-    #             bnx, bny = nx + dx, ny + dy
-    #             if (bnx, bny) in self.walls or (bnx, bny) in boxes_xy:
-    #                 continue
-
-    #             reduced_boxes = boxes_xy - {(nx, ny)}
-    #             reachable_without_box = get_reachable_positions((wx, wy), self.walls, reduced_boxes)
-    #             if (nx, ny) in reachable_without_box:
-    #                 valid_actions.append(action)
-    #         else:
-    #             if (nx, ny) in reachable:
-    #                 valid_actions.append(action)
-
-    #     return valid_actions
 
 
     def result(self, state, action):
@@ -408,20 +443,6 @@ class SokobanPuzzle(search.Problem):
                 break
         return (new_worker, tuple(sorted(boxes, key=lambda b: (b[1], b[0]))))
 
-    # def result(self, state, action):
-    #     (wx, wy), boxes = state
-    #     dx, dy = {'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1)}[action]
-    #     new_worker = (wx + dx, wy + dy)
-    #     boxes_xy = {(b[0], b[1]) for b in boxes}
-    #     if new_worker not in boxes_xy:
-    #         return (new_worker, boxes)
-
-    #     new_boxes = list(boxes)
-    #     for i, (bx, by, w) in enumerate(new_boxes):
-    #         if (bx, by) == new_worker:
-    #             new_boxes[i] = (bx + dx, by + dy, w)
-    #             break
-    #     return (new_worker, tuple(sorted(new_boxes, key=lambda b: (b[1], b[0]))))
 
         
     def goal_test(self, state):
@@ -450,32 +471,48 @@ class SokobanPuzzle(search.Problem):
         
     #     _, boxes = node.state
     #     #return sum(min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets) for bx, by, _ in boxes)
-    #     return sum(min(abs(bx - tx) + abs(by - ty) * (1 + weight * 0.8) for (tx, ty) in self.targets)
-    #                for bx, by, weight in boxes)
+
 
     def h(self, node):
-        if self.is_deadlock(node.state):
-            return 10**6  # high cost for deadlocked states
-        
-        worker, boxes = node.state
-        
-        # Compute cost for boxes to reach some target.
-        box_cost = sum(
-            min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets)
-            for bx, by, weight in boxes
-        )
-        
-        # Compute extra cost based on how far the worker is from the closest box
-        # that is not already on a target.
-        candidate_boxes = [(bx, by) for bx, by, weight in boxes if (bx, by) not in self.targets]
-        if candidate_boxes:
-            worker_cost = min(abs(worker[0] - bx) + abs(worker[1] - by) for bx, by in candidate_boxes)
-        else:
-            worker_cost = 0
-        
-        # Tune the relative weight of worker positioning here:
-        return box_cost + worker_cost * 0.5
+        state = node.state
+        box_pos = frozenset((b[0], b[1]) for b in state[1])
 
+        # if not hasattr(self, '_seen_box_configs'):
+        #     self._seen_box_configs = set()
+
+        # penalty for repeated box positions with no new pushes
+        if box_pos in self._seen_box_configs:
+            penalty = 100  # discourage returning here without progress
+        else:
+            penalty = 0
+            self._seen_box_configs.add(box_pos)
+
+        if self.is_deadlock(node.state):
+            return 10**6
+
+        worker, boxes = node.state
+        box_cost = 0
+
+        for bx, by, weight in boxes:
+            # Reward being on target by reducing cost
+            if (bx, by) in self.targets:
+                continue
+            d = min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets)
+            box_cost += d * (1 + weight * 0.5)
+
+        # Find boxes that can be pushed (reachable by worker)
+        # boxes_xy = {(b[0], b[1]) for b in boxes}
+        # # reachable = get_reachable_positions(worker, self.walls, boxes_xy)
+        # reachable = getattr(self, '_cached_reachable', get_reachable_positions(worker, self.walls, boxes_xy))
+
+        # reachable_boxes = [box for box in boxes if (box[0], box[1]) in reachable]
+        # if reachable_boxes:
+        #     nearest_push_dist = min(abs(worker[0] - bx) + abs(worker[1] - by)
+        #                             for bx, by, _ in reachable_boxes)
+        # else:
+        #     nearest_push_dist = 10  # punish being far from any box
+
+        return box_cost + penalty #+ nearest_push_dist * 2  # boost penalty for idling
 
 
 
@@ -632,7 +669,12 @@ def solve_weighted_sokoban(warehouse):
     # if is_initial_state_deadlocked(warehouse):
     #     return ['Impossible'], None 
     
+    
     problem = SokobanPuzzle(warehouse)
+    
+    if all((b[0], b[1]) in warehouse.targets for b in warehouse.boxes):
+        return [], 0
+    
     result = search.astar_graph_search(problem)
     
     
