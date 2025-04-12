@@ -31,6 +31,8 @@ Last modified by 2021-08-17  by f.maire@qut.edu.au
 # with these files
 import search 
 import sokoban
+from collections import defaultdict
+from sokoban import find_2D_iterator
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -46,8 +48,6 @@ def my_team():
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-from sokoban import find_2D_iterator
-
 def find_1D_iterator_exclude(line, *exclude_chars):
     for pos, char in enumerate(line):
         if char not in exclude_chars:
@@ -59,20 +59,19 @@ def find_2D_iterator_exclude(lines, *exclude_chars):
             yield (x, y)
 
 def get_corner_taboo_cells(candidate_taboo_cells, wall_cells):
-    corner_taboo_cells: set[tuple] = set()
-    for candidate_taboo_cell in candidate_taboo_cells:
-        x, y = candidate_taboo_cell
-        north = x, y - 1
-        east = x + 1, y
-        south = x, y + 1
-        west = x - 1, y
-
-        if (north in wall_cells and east in wall_cells) or \
-        (east in wall_cells and south in wall_cells) or \
-        (south in wall_cells and west in wall_cells) or \
-        (west in wall_cells and north in wall_cells):
+    corner_taboo_cells = set()
+    for (x, y) in candidate_taboo_cells:
+        north = (x, y - 1)
+        east  = (x + 1, y)
+        south = (x, y + 1)
+        west  = (x - 1, y)
+        if ((north in wall_cells and east in wall_cells) or
+            (east in wall_cells and south in wall_cells) or
+            (south in wall_cells and west in wall_cells) or
+            (west in wall_cells and north in wall_cells)):
             corner_taboo_cells.add((x, y))
     return corner_taboo_cells
+
 
 def get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells):
     wall_taboo_cells: set[tuple] = set()
