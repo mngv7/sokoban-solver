@@ -13,11 +13,11 @@
 import search 
 import sokoban
 from collections import deque
-from itertools import combinations, permutations
+from itertools import combinations
+import sys
 
 # Predefined constant for moves (used by several methods)
 MOVES = {'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1)}
-
 
 def my_team():
     """
@@ -156,14 +156,47 @@ def get_reachable_positions(worker_pos, walls, boxes):
 
 
 # ---------------------------------------------------------------------------
+# DP-based assignment (minimum cost matching) helper
+# ---------------------------------------------------------------------------
+def hungarian_dp(cost_matrix):
+    """
+    Computes the minimal assignment cost using DP and bitmasking.
+    cost_matrix is a list of lists where cost_matrix[i][j] gives
+    the cost to assign box i to target j.
+    Here, number of boxes = n and number of targets = m (with m >= n).
+    """
+    n = len(cost_matrix)
+    if n == 0:
+        return 0
+    m = len(cost_matrix[0])
+    memo = {}
+
+    def dp(i, used):
+        # i: current index for box to assign; used is a bitmask over targets (m bits)
+        if i == n:
+            return 0
+        if (i, used) in memo:
+            return memo[(i, used)]
+        best = float('inf')
+        for j in range(m):
+            if not (used & (1 << j)):
+                # Try assigning target j to box i
+                best = min(best, cost_matrix[i][j] + dp(i + 1, used | (1 << j)))
+        memo[(i, used)] = best
+        return best
+
+    return dp(0, 0)
+
+
+# ---------------------------------------------------------------------------
 # The Sokoban Puzzle Class
 # ---------------------------------------------------------------------------
 
 class SokobanPuzzle(search.Problem):
     """
     An instance of the SokobanPuzzle class represents a Sokoban puzzle.
-    An instance contains information about the walls, targets, boxes, and the worker.
-    This implementation is compatible with the search functions of the provided module search.py.
+    It contains information about walls, targets, boxes, and the worker.
+    This implementation is compatible with the search functions provided in search.py.
     """
 
     def __init__(self, warehouse):
@@ -187,14 +220,14 @@ class SokobanPuzzle(search.Problem):
         self.taboo_set = {(j, i)
                           for i, line in enumerate(taboo_map.splitlines())
                           for j, ch in enumerate(line) if ch == 'X'}
-        # Precompute a sorted list of targets for consistent ordering in assignments
+        # Precompute a sorted list of targets for consistent ordering in assignment cost computation
         self.targets_list = sorted(list(self.targets))
 
     def __eq__(self, other):
         return isinstance(other, SokobanPuzzle) and self.initial == other.initial
 
     def __hash__(self):
-        return hash(self.initial)  # only hash box positions
+        return hash(self.initial)  # only hash based on box positions
 
     def is_box_blocked(self, box_positions, box):
         x, y = box
@@ -232,7 +265,7 @@ class SokobanPuzzle(search.Problem):
         if any((bx, by) in self.taboo_set and (bx, by) not in self.targets for bx, by, _ in boxes):
             self.deadlock_cache[box_positions] = True
             return True
-        # Soft deadlock: box blocked or frozen clusters may be reversible
+        # Soft deadlock: if a box is blocked or if frozen clusters occur, then return deadlock
         if any(self.is_box_blocked(box_positions, (bx, by)) for bx, by, _ in boxes):
             return True
         if self.has_frozen_clusters(box_positions):
@@ -306,34 +339,34 @@ class SokobanPuzzle(search.Problem):
 
     def compute_assignment_cost(self, boxes):
         """
-        Computes the minimum total weighted Manhattan distance to assign each box to a unique target.
-        For a box-target pair the cost is: (Manhattan distance) * (1 + weight*0.5)
-        Uses cache to speed up repeated evaluations.
+        Computes the minimal total weighted Manhattan distance to assign each box to a unique target.
+        For a given box-target pair the cost is: (Manhattan distance) * (1 + weight*0.5)
+        Uses a DP-based assignment solver (hungarian_dp) to speed up the computation.
         """
+        # Create a key from sorted boxes (by x, y, weight) for caching purposes.
         key = tuple(sorted(boxes, key=lambda b: (b[0], b[1], b[2])))
         if key in self._assignment_cache:
             return self._assignment_cache[key]
         
         n = len(boxes)
-        best = float('inf')
-        # Consider every permutation of targets for the boxes.
-        for assignment in permutations(self.targets_list, n):
-            total = 0
-            for (bx, by, weight), (tx, ty) in zip(boxes, assignment):
-                total += (abs(bx - tx) + abs(by - ty)) * (1 + weight * 0.5)
-                if total >= best:
-                    break  # early cutoff if cost already exceeds best
-            if total < best:
-                best = total
-        self._assignment_cache[key] = best
-        return best
+        m = len(self.targets_list)
+        # Build the cost matrix: rows for boxes; columns for targets.
+        cost_matrix = []
+        for bx, by, weight in boxes:
+            row = []
+            for tx, ty in self.targets_list:
+                row.append((abs(bx - tx) + abs(by - ty)) * (1 + weight * 0.5))
+            cost_matrix.append(row)
+        assignment_cost = hungarian_dp(cost_matrix)
+        self._assignment_cache[key] = assignment_cost
+        return assignment_cost
 
     def h(self, node):
         state = node.state
         worker, boxes = state
         box_positions = frozenset((b[0], b[1]) for b in boxes)
 
-        # Apply penalty if this box configuration has been seen before
+        # Apply a penalty if this box configuration has been seen before
         penalty = 100 if box_positions in self._seen_box_configs else 0
         if penalty == 0:
             self._seen_box_configs.add(box_positions)
@@ -341,7 +374,7 @@ class SokobanPuzzle(search.Problem):
         if self.is_deadlock(state):
             return 10**6
 
-        # Use minimum assignment cost as a heuristic (more informed than individual Manhattan costs)
+        # Use minimum assignment cost as the heuristic (more informative than individual Manhattan distances)
         assignment_cost = self.compute_assignment_cost(boxes)
         return assignment_cost + penalty
 
@@ -352,11 +385,11 @@ class SokobanPuzzle(search.Problem):
 
 def check_elem_action_seq(warehouse, action_seq):
     """
-    Determine if the sequence of actions in 'action_seq' is legal.
+    Determine if the sequence of actions listed in 'action_seq' is legal.
     
     Returns:
-      "Impossible" if an action is invalid.
-      Otherwise, returns the string representing the state of the puzzle after executing the sequence.
+      "Impossible" if any action is invalid.
+      Otherwise, returns a string representing the state of the puzzle after executing the sequence.
     """
     warehouse_copy = warehouse.copy()
     moves = {
@@ -390,11 +423,11 @@ def check_elem_action_seq(warehouse, action_seq):
 
 def solve_weighted_sokoban(warehouse):
     """
-    Analyzes the given warehouse and returns the solution for the weighted Sokoban puzzle.
+    Analyzes the given warehouse and returns a solution for the weighted Sokoban puzzle.
     
     Returns:
-      If unsolvable: ('Impossible', None)
-      If solved: (solution action sequence, total cost)
+      If unsolvable: (['Impossible'], None)
+      Otherwise: (solution action sequence as a list, total cost)
     """
     problem = SokobanPuzzle(warehouse)
     if all((b[0], b[1]) in warehouse.targets for b in warehouse.boxes):
