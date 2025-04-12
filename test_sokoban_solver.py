@@ -233,7 +233,7 @@ class TestSokoban:
             print('Check that you pushed the right box onto the left target!')
         print(f'Your cost = {cost}, expected cost = {expected_cost}')
 
-    @pytest.mark.skip("takes ages to run")
+    #@pytest.mark.skip("takes ages to run")
     def test_solve_weighted_sokoban_wh147(self):
         wh = Warehouse()    
         wh.load_warehouse( "./warehouses/warehouse_147.txt")
@@ -271,7 +271,7 @@ class TestSokoban:
     
     
     
-    @pytest.mark.skip("Not implemented")
+    #@pytest.mark.skip("Not implemented")
     def test_solve_weighted_sokoban_wh5n(self):
         wh = Warehouse()    
         wh.load_warehouse( "./warehouses/warehouse_5n.txt")

@@ -246,6 +246,9 @@ class SokobanPuzzle(search.Problem):
     
     
     def actions(self, state):
+        if self.is_deadlock(state) and state != self.initial:
+            return []
+        
         directions = ['Up', 'Down', 'Left', 'Right']
         (wx, wy), boxes = state
         boxes_xy = {(b[0], b[1]) for b in boxes} # extract (x,y) positions from boxes
@@ -309,8 +312,8 @@ class SokobanPuzzle(search.Problem):
         return c + 1
   
     def h(self, node):
-        if self.is_deadlock(node.state):
-            return 10**6  # remove deadlocked states by assigning a high cost.
+        # if self.is_deadlock(node.state):
+        #     return 10**6  # remove deadlocked states by assigning a high cost.
         
         _, boxes = node.state
         return sum(min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets) for bx, by, _ in boxes)
