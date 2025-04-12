@@ -91,7 +91,6 @@ def get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells):
         ys.sort()
         for i in range(len(ys) - 1):
             y1, y2 = ys[i], ys[i+1]
-            # Check that a wall is above the top corner and below the lower one.
             if (x, y1 - 1) in wall_cells and (x, y2 + 1) in wall_cells:
                 gap_count = 0
                 last_was_gap = False
@@ -111,7 +110,6 @@ def get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells):
                 if is_valid and gap_count <= 1:
                     for y in range(y1 + 1, y2):
                         wall_taboo_cells.add((x, y))
-                        
     # Group corners by row for horizontal segments.
     corners_by_row = defaultdict(list)
     for (x, y) in corner_taboo_cells:
@@ -150,8 +148,8 @@ def get_taboo_cell_map(warehouse, taboo_cells):
             elif line[j] not in {'#', ' '}:
                 line[j] = ' '
 
-    taboo_cell_map = "\n".join("".join(line) for line in lines)
-    return taboo_cell_map
+    taboo_cell_map_r = "\n".join("".join(line) for line in lines)
+    return taboo_cell_map_r
 
 def mark_outside_walls(s):
     first = s.find('#')
@@ -186,17 +184,15 @@ def taboo_cells(warehouse):
     '''
     lines = str(warehouse).split('\n')
     wall_cells = set(warehouse.walls)
-    # Combine targets with positions from '*' and '#' to "nullify" rows
+    # Combine targets with positions from '*' and '#' to "nullify" rows.
     taboo_row_nullifier = set(warehouse.targets) | set(find_2D_iterator(lines, '*')) | set(find_2D_iterator(lines, '#'))
     lines = [mark_outside_walls(line) for line in lines]
-    
+
     candidate_taboo_cells = set(find_2D_iterator_exclude(lines, '.', '#', '*', '?'))
     corner_taboo_cells = get_corner_taboo_cells(candidate_taboo_cells, wall_cells)
     wall_taboo_cells = get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells)
-    all_taboo_cells = corner_taboo_cells | wall_taboo_cells
-
-    taboo_cell_map = get_taboo_cell_map(warehouse, taboo_cells)
-
+    computed_taboo_set = corner_taboo_cells | wall_taboo_cells
+    taboo_cell_map = get_taboo_cell_map(warehouse, computed_taboo_set)
     return taboo_cell_map
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -251,7 +247,6 @@ class SokobanPuzzle(search.Problem):
     
     def actions(self, state):
         (wx, wy), boxes = state
-        # Build a set of box positions for fast lookups.
         boxes_xy = {(b[0], b[1]) for b in boxes}
         available_actions = []
         for action, (dx, dy) in self._moves.items():
@@ -259,7 +254,6 @@ class SokobanPuzzle(search.Problem):
             if (nx, ny) in self.walls:
                 continue
             if (nx, ny) in boxes_xy:
-                # Calculate where the box would be pushed.
                 bnx, bny = nx + dx, ny + dy
                 if (bnx, bny) in boxes_xy or (bnx, bny) in self.walls:
                     continue
@@ -274,12 +268,10 @@ class SokobanPuzzle(search.Problem):
         dx, dy = self._moves[action]
         new_worker = (wx + dx, wy + dy)
         new_boxes = list(boxes)
-        # If the worker moves into a box, update its position.
         for i, (bx, by, w) in enumerate(new_boxes):
             if (bx, by) == new_worker:
                 new_boxes[i] = (bx + dx, by + dy, w)
                 break
-        # Return state with boxes sorted to ensure a canonical form.
         return (new_worker, tuple(sorted(new_boxes, key=lambda b: (b[1], b[0]))))
         
     def goal_test(self, state):
