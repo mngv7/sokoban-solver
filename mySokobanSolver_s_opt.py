@@ -74,48 +74,62 @@ def get_corner_taboo_cells(candidate_taboo_cells, wall_cells):
 
 
 def get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells):
-    wall_taboo_cells: set[tuple] = set()
-
-    for corner1 in corner_taboo_cells:
-        for corner2 in corner_taboo_cells:
-            if corner1 == corner2:
-                continue
-
-            x1, y1 = corner1
-            x2, y2 = corner2
-
-            if x1 == x2:  # Same column (vertical check)
-                if (x1, y1 - 1) in wall_cells and (x1, y2 + 1) in wall_cells:
-                    min_y, max_y = min(y1, y2), max(y1, y2)
-                    is_valid = True
-                    for y in range(min_y + 1, max_y):
-                        if (x1, y) in taboo_row_nullifier:
+    wall_taboo_cells = set()
+    # Group corners by column for vertical segments.
+    corners_by_col = defaultdict(list)
+    for (x, y) in corner_taboo_cells:
+        corners_by_col[x].append(y)
+    for x, ys in corners_by_col.items():
+        ys.sort()
+        for i in range(len(ys) - 1):
+            y1, y2 = ys[i], ys[i+1]
+            if (x, y1 - 1) in wall_cells and (x, y2 + 1) in wall_cells:
+                gap_count = 0
+                last_was_gap = False
+                is_valid = True
+                for y in range(y1 + 1, y2):
+                    if (x, y) in taboo_row_nullifier:
+                        is_valid = False
+                        break
+                    if ((x - 1, y) not in wall_cells and (x + 1, y) not in wall_cells):
+                        if last_was_gap:
                             is_valid = False
                             break
-                        if (x1 - 1, y) not in wall_cells and (x1 + 1, y) not in wall_cells:
-                            # If no walls on either side, gap detected
-                            is_valid = False
-                            break
-                    if is_valid:
-                        for y in range(min_y + 1, max_y):
-                            wall_taboo_cells.add((x1, y))
+                        gap_count += 1
+                        last_was_gap = True
+                    else:
+                        last_was_gap = False
+                if is_valid and gap_count <= 1:
+                    for y in range(y1 + 1, y2):
+                        wall_taboo_cells.add((x, y))
 
-            elif y1 == y2:  # Same row (horizontal check)
-                if (x1 - 1, y1) in wall_cells and (x2 + 1, y1) in wall_cells:
-                    min_x, max_x = min(x1, x2), max(x1, x2)
-                    is_valid = True
-                    for x in range(min_x + 1, max_x):
-                        if (x, y1) in taboo_row_nullifier:
+            # Group corners by row for horizontal segments.
+    corners_by_row = defaultdict(list)
+    for (x, y) in corner_taboo_cells:
+        corners_by_row[y].append(x)
+    for y, xs in corners_by_row.items():
+        xs.sort()
+        for i in range(len(xs) - 1):
+            x1, x2 = xs[i], xs[i+1]
+            if (x1 - 1, y) in wall_cells and (x2 + 1, y) in wall_cells:
+                gap_count = 0
+                last_was_gap = False
+                is_valid = True
+                for x in range(x1 + 1, x2):
+                    if (x, y) in taboo_row_nullifier:
+                        is_valid = False
+                        break
+                    if ((x, y - 1) not in wall_cells and (x, y + 1) not in wall_cells):
+                        if last_was_gap:
                             is_valid = False
                             break
-                        if (x, y1 - 1) not in wall_cells and (x, y1 + 1) not in wall_cells:
-                            # If no walls above or below, gap detected
-                            is_valid = False
-                            break
-                    if is_valid:
-                        for x in range(min_x + 1, max_x):
-                            wall_taboo_cells.add((x, y1))
-
+                        gap_count += 1
+                        last_was_gap = True
+                    else:
+                        last_was_gap = False
+                if is_valid and gap_count <= 1:
+                    for x in range(x1 + 1, x2):
+                        wall_taboo_cells.add((x, y))
     return wall_taboo_cells
 
 
