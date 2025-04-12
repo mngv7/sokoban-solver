@@ -322,12 +322,12 @@ class SokobanPuzzle(search.Problem):
         if box_positions in self.deadlock_cache:
             return self.deadlock_cache[box_positions]
 
-        # Check for taboo deadlock (fatal and cacheable)
+        # Check for taboo deadlock (fatal)
         if any((bx, by) in self.taboo_set and (bx, by) not in self.targets for bx, by, _ in boxes):
             self.deadlock_cache[box_positions] = True
             return True
 
-        # Don't cache soft deadlocks (they might change)
+        # Don't cache soft deadlocks (they might get out of deadlock)
         if any(self.is_box_blocked(box_positions, (bx, by)) for bx, by, _ in boxes):
             return True
 
@@ -410,7 +410,7 @@ class SokobanPuzzle(search.Problem):
 
         # penalty for repeated box positions with no new pushes
         if box_pos in self._seen_box_configs:
-            penalty = 100  # discourage returning here without progress
+            penalty = 100  
         else:
             penalty = 0
             self._seen_box_configs.add(box_pos)
@@ -543,7 +543,7 @@ def solve_weighted_sokoban(warehouse):
 
     # develop this initial check??:
     # if is_initial_state_deadlocked(warehouse):
-    #     return ['Impossible'], None 
+    #     return ['Impossible']
     
     problem = SokobanPuzzle(warehouse)
     
