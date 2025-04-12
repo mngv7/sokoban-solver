@@ -10,35 +10,34 @@ of the interfaces.
 You are NOT allowed to change the defined interfaces.
 In other words, you must fully adhere to the specifications of the 
 functions, their arguments and returned values.
-Changing the interface of a function will likely result in a fail 
-for the test of your code. This is not negotiable! 
 
-You have to make sure that your code works with the files provided 
-(search.py and sokoban.py) as your code will be tested 
-with the original copies of these files. 
+You have to make sure that your code works with the provided 
+search.py and sokoban.py files as your code will be tested 
+with these files.
 
-Last modified by 2021-08-17  by f.maire@qut.edu.au
-- clarifiy some comments, rename some functions
-  (and hopefully didn't introduce any bug!)
+Last modified by 2025-04-17 
 """
 
 import search
 import sokoban
 
-# --------------------------------------------------
-# Basic team information
-# --------------------------------------------------
+# ------------------------------------------------------------------
+# Provide your team info
+# ------------------------------------------------------------------
 def my_team():
     '''
-    Return the list of team members as a list of triplets (student_number, first_name, last_name).
+    Return the list of team members of this assignment submission as a list
+    of triplets of the form (student_number, first_name, last_name)
     '''
-    return [ (11592931, 'Zackariya', 'Taylor'),
-             (11220139, 'Isobel', 'Jones'),
-             (1124744, 'Sophia', 'Sweet') ]
+    return [
+        (11592931, 'Zackariya', 'Taylor'),
+        (11220139, 'Isobel', 'Jones'),
+        (1124744,  'Sophia', 'Sweet')
+    ]
 
-# --------------------------------------------------
-# Taboo cell functions and helper iterators
-# --------------------------------------------------
+# ------------------------------------------------------------------
+# Helper iterators for taboo cells
+# ------------------------------------------------------------------
 from sokoban import find_2D_iterator
 
 def find_1D_iterator_exclude(line, *exclude_chars):
@@ -52,56 +51,57 @@ def find_2D_iterator_exclude(lines, *exclude_chars):
             yield (x, y)
 
 def get_corner_taboo_cells(candidate_taboo_cells, wall_cells):
-    corner_taboo_cells: set[tuple] = set()
-    for candidate_taboo_cell in candidate_taboo_cells:
-        x, y = candidate_taboo_cell
+    corner_taboo_cells = set()
+    for (x, y) in candidate_taboo_cells:
         north = (x, y - 1)
         east  = (x + 1, y)
         south = (x, y + 1)
         west  = (x - 1, y)
-        if (north in wall_cells and east in wall_cells) or \
-           (east in wall_cells and south in wall_cells) or \
-           (south in wall_cells and west in wall_cells) or \
-           (west in wall_cells and north in wall_cells):
+        if ((north in wall_cells and east in wall_cells) or
+            (east in wall_cells and south in wall_cells) or
+            (south in wall_cells and west in wall_cells) or
+            (west in wall_cells and north in wall_cells)):
             corner_taboo_cells.add((x, y))
     return corner_taboo_cells
 
 def get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells):
-    wall_taboo_cells: set[tuple] = set()
-    for corner1 in corner_taboo_cells:
-        for corner2 in corner_taboo_cells:
-            if corner1 == corner2:
+    wall_taboo_cells = set()
+    for c1 in corner_taboo_cells:
+        for c2 in corner_taboo_cells:
+            if c1 == c2:
                 continue
-            x1, y1 = corner1
-            x2, y2 = corner2
-            if x1 == x2:  # vertical check
+            x1, y1 = c1
+            x2, y2 = c2
+            # vertical
+            if x1 == x2:
                 if (x1, y1 - 1) in wall_cells and (x1, y2 + 1) in wall_cells:
                     min_y, max_y = min(y1, y2), max(y1, y2)
-                    is_valid = True
-                    for y in range(min_y + 1, max_y):
-                        if (x1, y) in taboo_row_nullifier:
-                            is_valid = False
+                    valid = True
+                    for yy in range(min_y + 1, max_y):
+                        if (x1, yy) in taboo_row_nullifier:
+                            valid = False
                             break
-                        if (x1 - 1, y) not in wall_cells and (x1 + 1, y) not in wall_cells:
-                            is_valid = False
+                        if (x1 - 1, yy) not in wall_cells and (x1 + 1, yy) not in wall_cells:
+                            valid = False
                             break
-                    if is_valid:
-                        for y in range(min_y + 1, max_y):
-                            wall_taboo_cells.add((x1, y))
-            elif y1 == y2:  # horizontal check
+                    if valid:
+                        for yy in range(min_y + 1, max_y):
+                            wall_taboo_cells.add((x1, yy))
+            # horizontal
+            elif y1 == y2:
                 if (x1 - 1, y1) in wall_cells and (x2 + 1, y1) in wall_cells:
                     min_x, max_x = min(x1, x2), max(x1, x2)
-                    is_valid = True
-                    for x in range(min_x + 1, max_x):
-                        if (x, y1) in taboo_row_nullifier:
-                            is_valid = False
+                    valid = True
+                    for xx in range(min_x + 1, max_x):
+                        if (xx, y1) in taboo_row_nullifier:
+                            valid = False
                             break
-                        if (x, y1 - 1) not in wall_cells and (x, y1 + 1) not in wall_cells:
-                            is_valid = False
+                        if (xx, y1 - 1) not in wall_cells and (xx, y1 + 1) not in wall_cells:
+                            valid = False
                             break
-                    if is_valid:
-                        for x in range(min_x + 1, max_x):
-                            wall_taboo_cells.add((x, y1))
+                    if valid:
+                        for xx in range(min_x + 1, max_x):
+                            wall_taboo_cells.add((xx, y1))
     return wall_taboo_cells
 
 def get_taboo_cell_map(warehouse, taboo_cells):
@@ -112,125 +112,112 @@ def get_taboo_cell_map(warehouse, taboo_cells):
                 line[j] = 'X'
             elif line[j] not in {'#', ' '}:
                 line[j] = ' '
-    taboo_cell_map = "\n".join("".join(line) for line in lines)
-    return taboo_cell_map
+    return "\n".join("".join(line) for line in lines)
 
 def mark_outside_walls(s):
     first = s.find('#')
     last  = s.rfind('#')
     if first == -1 or last == -1:
-        return s  
-    return '?' * first + s[first:last + 1] + '?' * (len(s) - last - 1)
+        return s
+    return ('?' * first) + s[first:last + 1] + ('?' * (len(s) - last - 1))
 
 def taboo_cells(warehouse):
-    '''  
-    Identify taboo cells (cells that if occupied by a box cause unsolvability).
-    '''
+    """
+    Identify the taboo cells of a warehouse.
+    """
     lines = str(warehouse).split('\n')
     wall_cells = set(warehouse.walls)
-    taboo_row_nullifier = set(warehouse.targets) | set(find_2D_iterator(lines, '*')) | set(find_2D_iterator(lines, '#'))
+    taboo_row_nullifier = (set(warehouse.targets) |
+                           set(find_2D_iterator(lines, '*')) |
+                           set(find_2D_iterator(lines, '#')))
     lines = [mark_outside_walls(line) for line in lines]
-    candidate_taboo_cells = set(find_2D_iterator_exclude(lines, '.', '#', '*', '?'))
-    corner_taboo_cells = get_corner_taboo_cells(candidate_taboo_cells, wall_cells)
-    wall_taboo_cells   = get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells)
-    taboo_cells_set    = corner_taboo_cells | wall_taboo_cells
-    taboo_cell_map = get_taboo_cell_map(warehouse, taboo_cells_set)
-    return taboo_cell_map
+    candidate_taboo = set(find_2D_iterator_exclude(lines, '.', '#', '*', '?'))
+    corners = get_corner_taboo_cells(candidate_taboo, wall_cells)
+    wall_tabs = get_wall_taboo_cells(corners, taboo_row_nullifier, wall_cells)
+    taboo_cells_set = corners | wall_tabs
+    return get_taboo_cell_map(warehouse, taboo_cells_set)
 
-# --------------------------------------------------
-# Macro-move helpers: Compute reachable cells and paths.
-# --------------------------------------------------
-def compute_reachable_and_paths(worker_pos, walls, boxes):
-    """
-    Given the worker's position, compute all reachable positions in the grid
-    (avoiding walls and boxes). Returns a dict mapping positions to a tuple of
-    (distance, path) where path is a list of elementary moves (strings).
-    """
+# ------------------------------------------------------------------
+# BFS to determine worker reachable squares (single-step approach).
+# We use caching to avoid recomputing for the same arrangement.
+# ------------------------------------------------------------------
+def get_reachable_positions(worker_pos, walls, boxes):
     from collections import deque
-    moves = {
-        "Left":  (-1, 0),
-        "Right": (1, 0),
-        "Up":    (0, -1),
-        "Down":  (0, 1)
-    }
-    frontier = deque()
-    frontier.append(worker_pos)
-    dist = {worker_pos: (0, [])}
-    while frontier:
-        pos = frontier.popleft()
-        x, y = pos
-        d, path = dist[pos]
-        for move, (dx, dy) in moves.items():
-            nx, ny = x + dx, y + dy
-            newpos = (nx, ny)
-            if newpos in walls or newpos in boxes:
-                continue
-            if newpos not in dist:
-                new_path = path + [move]
-                dist[newpos] = (d + 1, new_path)
-                frontier.append(newpos)
-    return dist
+    visited = set()
+    queue = deque([worker_pos])
+    while queue:
+        x, y = queue.popleft()
+        if (x, y) in visited:
+            continue
+        visited.add((x, y))
+        for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
+            nx, ny = x+dx, y+dy
+            if (nx, ny) not in walls and (nx, ny) not in boxes and (nx, ny) not in visited:
+                queue.append((nx, ny))
+    return visited
 
-# --------------------------------------------------
-# DP Assignment: a minimal cost matching for boxes -> targets.
-#
-# Given a cost matrix cost_matrix[i][j] representing the cost to assign box i to target j,
-# we use bitmask dynamic programming to compute the minimal total cost assignment.
-# (This method is efficient for small numbers of boxes.)
-# --------------------------------------------------
+# ------------------------------------------------------------------
+# Minimal assignment cost function using bitmask DP.
+# ------------------------------------------------------------------
 def dp_assignment(cost_matrix):
+    """
+    cost_matrix[i][j]: cost of assigning box i to target j.
+    Returns minimal sum of assignment cost.
+    """
     n = len(cost_matrix)
-    dp = {0: 0}
-    # Loop over all masks; each mask's bit count tells you how many targets have been assigned.
-    for mask in range(0, 1 << n):
-        # Count the number of assigned targets (which equals the target index to assign next).
-        j = bin(mask).count("1")
-        if j >= n:  # all targets assigned already
+    dp = {0: 0}  # key: bitmask of which boxes have been assigned, value: minimal cost so far
+    for mask in range(1 << n):
+        # j = number of bits set in mask => which target index to assign next
+        j = bin(mask).count('1')
+        if j >= n:
             continue
         for i in range(n):
-            if mask & (1 << i) == 0:
+            if not (mask & (1 << i)):  # if box i not assigned yet
                 new_mask = mask | (1 << i)
-                new_cost = dp[mask] + cost_matrix[i][j]
-                if new_mask not in dp or new_cost < dp[new_mask]:
-                    dp[new_mask] = new_cost
+                cost = dp[mask] + cost_matrix[i][j]
+                if new_mask not in dp or cost < dp[new_mask]:
+                    dp[new_mask] = cost
     return dp[(1 << n) - 1]
 
-# --------------------------------------------------
-# SokobanPuzzle class (macro moves with improved heuristic)
-# --------------------------------------------------
+# ------------------------------------------------------------------
+# SokobanPuzzle: single-step expansions, with advanced caching & heuristic
+# ------------------------------------------------------------------
 from itertools import combinations
 
 class SokobanPuzzle(search.Problem):
-    '''
-    An instance of SokobanPuzzle represents a weighted Sokoban problem.
-    This macro-moves version aggregates the worker’s free movement into composite actions.
-    An improved heuristic uses a minimal assignment cost between boxes and targets.
-    '''
+    """
+    A single-step (OG) Sokoban puzzle class with optimizations:
+      - BFS caching
+      - advanced deadlock checks
+      - minimal assignment heuristic
+      - repeated-state penalty
+    """
     def __init__(self, warehouse):
         self.warehouse = warehouse
-        self.walls = set(warehouse.walls)
-        self.targets = set(warehouse.targets)
-        self.visited_box_states = set()
+        self.walls     = set(warehouse.walls)
+        self.targets   = set(warehouse.targets)
         self.deadlock_cache = {}
-        # Caches for BFS and heuristic values
-        self.reachable_cache = {}  # key: (worker, frozenset(boxes)); value: dict pos -> (distance, path)
-        self.h_cache = {}          # heuristic cache
+        self.reachable_cache = {}
+        self.h_cache = {}
 
-        boxes_with_weights = [(box[0], box[1], weight)
-                              for box, weight in zip(warehouse.boxes, warehouse.weights)]
-        boxes_with_weights.sort(key=lambda b: (b[1], b[0]))
-        self.initial = (warehouse.worker, tuple(boxes_with_weights))
-
-        if not hasattr(self, '_seen_box_configs'):
+        # For repeated-state penalty
+        if not hasattr(self, "_seen_box_configs"):
             self._seen_box_configs = set()
 
+        # Gather boxes + weights
+        boxes_with_weights = [(b[0], b[1], w) 
+                              for b, w in zip(warehouse.boxes, warehouse.weights)]
+        # Sort them for consistent state ordering
+        boxes_with_weights.sort(key=lambda x: (x[1], x[0]))
+        self.initial = (warehouse.worker, tuple(boxes_with_weights))
+
+        # Precompute taboo set
         taboo_map = taboo_cells(warehouse)
-        self.taboo_set = {
-            (j, i)
-            for i, line in enumerate(taboo_map.splitlines())
-            for j, ch in enumerate(line)
-            if ch == 'X'
-        }
+        self.taboo_set = set()
+        for i, row in enumerate(taboo_map.splitlines()):
+            for j, ch in enumerate(row):
+                if ch == 'X':
+                    self.taboo_set.add((j, i))
 
     def __eq__(self, other):
         return isinstance(other, SokobanPuzzle) and self.initial == other.initial
@@ -240,23 +227,25 @@ class SokobanPuzzle(search.Problem):
 
     def is_box_blocked(self, box_positions, box):
         x, y = box
-        walls = self.walls
-        boxes = set(box_positions) - {(x, y)}
-        obstacles = walls.union(boxes)
-        if ((x - 1, y) in obstacles and (x, y - 1) in obstacles): return True
-        if ((x + 1, y) in obstacles and (x, y - 1) in obstacles): return True
-        if ((x - 1, y) in obstacles and (x, y + 1) in obstacles): return True
-        if ((x + 1, y) in obstacles and (x, y + 1) in obstacles): return True
+        obstacles = set(box_positions) | self.walls
+        # Check corner block
+        if ((x-1,y) in obstacles and (x,y-1) in obstacles): return True
+        if ((x+1,y) in obstacles and (x,y-1) in obstacles): return True
+        if ((x-1,y) in obstacles and (x,y+1) in obstacles): return True
+        if ((x+1,y) in obstacles and (x,y+1) in obstacles): return True
         return False
 
     def has_frozen_clusters(self, box_positions):
+        # If 2 adjacent boxes are both blocked, that's a cluster deadlock
         for b1, b2 in combinations(box_positions, 2):
             if abs(b1[0] - b2[0]) + abs(b1[1] - b2[1]) == 1:
-                if self.is_box_blocked(box_positions, b1) and self.is_box_blocked(box_positions, b2):
+                if self.is_box_blocked(box_positions, b1) and \
+                   self.is_box_blocked(box_positions, b2):
                     return True
         return False
 
     def is_taboo_deadlock(self, state):
+        # If any box is on a taboo cell (and not on a target), it's a deadlock
         _, boxes = state
         for bx, by, _ in boxes:
             if (bx, by) in self.taboo_set and (bx, by) not in self.targets:
@@ -264,122 +253,165 @@ class SokobanPuzzle(search.Problem):
         return False
 
     def is_deadlock(self, state):
+        """
+        Check various deadlocks: taboo, corner blocks, cluster.
+        Cache results by box positions.
+        """
         _, boxes = state
         box_positions = frozenset((b[0], b[1]) for b in boxes)
         if box_positions in self.deadlock_cache:
             return self.deadlock_cache[box_positions]
-        if any((bx, by) in self.taboo_set and (bx, by) not in self.targets for bx, by, _ in boxes):
+
+        # 1) taboo cells
+        if any(((bx, by) in self.taboo_set and (bx, by) not in self.targets)
+               for bx, by, _ in boxes):
             self.deadlock_cache[box_positions] = True
             return True
+
+        # 2) corner block
         if any(self.is_box_blocked(box_positions, (bx, by)) for bx, by, _ in boxes):
+            self.deadlock_cache[box_positions] = True
             return True
+
+        # 3) cluster freeze
         if self.has_frozen_clusters(box_positions):
+            self.deadlock_cache[box_positions] = True
             return True
+
+        self.deadlock_cache[box_positions] = False
         return False
 
-    # ----------------------------------------------------
-    # Macro-move actions: generate composite actions (pushes)
-    # ----------------------------------------------------
+    # ------------------------------------------------------------------
+    # actions() for single-step expansions
+    # ------------------------------------------------------------------
     def actions(self, state):
         if self.is_taboo_deadlock(state) and state != self.initial:
             return []
-        (worker_x, worker_y), boxes = state
-        boxes_set = {(b[0], b[1]) for b in boxes}
+        directions = ['Left','Right','Up','Down']
+        (wx, wy), boxes = state
+        boxes_xy = {(b[0], b[1]) for b in boxes}
 
-        key = (worker_x, worker_y, frozenset(boxes_set))
+        # BFS caching
+        key = (wx, wy, frozenset(boxes_xy))
         if key in self.reachable_cache:
-            reachable_dict = self.reachable_cache[key]
+            reachable = self.reachable_cache[key]
         else:
-            reachable_dict = compute_reachable_and_paths((worker_x, worker_y), self.walls, boxes_set)
-            self.reachable_cache[key] = reachable_dict
+            reachable = get_reachable_positions((wx, wy), self.walls, boxes_xy)
+            self.reachable_cache[key] = reachable
 
         moves = {
-            "Left":  (-1, 0),
-            "Right": (1, 0),
-            "Up":    (0, -1),
-            "Down":  (0, 1)
+            'Left':  (-1, 0),
+            'Right': (1, 0),
+            'Up':    (0, -1),
+            'Down':  (0, 1)
         }
-        macro_actions = []
-        for i, (bx, by, weight) in enumerate(boxes):
-            for move, (dx, dy) in moves.items():
-                push_from = (bx + dx, by + dy)
-                target = (bx - dx, by - dy)
-                if push_from not in reachable_dict:
+        valid_actions = []
+        for d in directions:
+            dx, dy = moves[d]
+            nx, ny = wx + dx, wy + dy
+            if (nx, ny) in self.walls:
+                continue
+            if (nx, ny) in boxes_xy:
+                # Potential push
+                bnx, bny = nx + dx, ny + dy
+                if (bnx, bny) in self.walls or (bnx, bny) in boxes_xy:
                     continue
-                if target in self.walls or target in boxes_set:
-                    continue
-                walk_distance, walk_path = reachable_dict[push_from]
-                elementary_moves = walk_path + [move]
-                total_cost = walk_distance + (1 + weight)
-                macro_actions.append((elementary_moves, i, (dx, dy), total_cost))
-        return macro_actions
+                # Worker must be able to get behind that box
+                if (wx, wy) in reachable:
+                    valid_actions.append(d)
+            else:
+                # Simple move
+                if (nx, ny) in reachable:
+                    valid_actions.append(d)
+        return valid_actions
 
-    # ----------------------------------------------------
-    # Macro-move result: apply the composite push action.
-    # ----------------------------------------------------
+    # ------------------------------------------------------------------
+    # result() applies a single-step action
+    # ------------------------------------------------------------------
     def result(self, state, action):
-        # action: (elementary_moves, box_index, (dx, dy), cost)
-        _, box_index, (dx, dy), _ = action
-        (worker, boxes) = state
+        (wx, wy), boxes = state
         boxes = list(boxes)
-        bx, by, weight = boxes[box_index]
-        new_box = (bx - dx, by - dy, weight)
-        boxes[box_index] = new_box
-        new_worker = (bx, by)
-        return (new_worker, tuple(sorted(boxes, key=lambda b: (b[1], b[0]))))
+        moves = {
+            'Left':  (-1, 0),
+            'Right': (1, 0),
+            'Up':    (0, -1),
+            'Down':  (0, 1)
+        }
+        dx, dy = moves[action]
+        new_worker = (wx + dx, wy + dy)
+        for i, (bx, by, w) in enumerate(boxes):
+            if (bx, by) == new_worker:
+                # push
+                new_box = (bx + dx, by + dy, w)
+                boxes[i] = new_box
+                break
+        boxes.sort(key=lambda b: (b[1], b[0]))
+        return (new_worker, tuple(boxes))
 
     def goal_test(self, state):
         _, boxes = state
         return all((b[0], b[1]) in self.targets for b in boxes)
 
-    def path_cost(self, c, state1, action, state2):
-        # action is (elementary_moves, box_index, (dx, dy), cost)
-        return c + action[3]
+    # ------------------------------------------------------------------
+    # path_cost with box weight
+    # ------------------------------------------------------------------
+    def path_cost(self, c, s1, action, s2):
+        (_, boxes1) = s1
+        (_, boxes2) = s2
+        # Identify which box moved
+        boxes1_set = {(b[0], b[1]): b for b in boxes1}
+        boxes2_set = {(b[0], b[1]): b for b in boxes2}
+        moved_box = None
+        for pos, b in boxes2_set.items():
+            if pos not in boxes1_set:
+                moved_box = b
+                break
+        if moved_box:
+            return c + 1 + moved_box[2]
+        return c + 1
 
-    # ----------------------------------------------------
-    # Improved heuristic function using minimal assignment.
-    # ----------------------------------------------------
+    # ------------------------------------------------------------------
+    # Improved heuristic: Minimal assignment (bitmask DP) + penalty for repeats
+    # ------------------------------------------------------------------
     def h(self, node):
         state = node.state
         if state in self.h_cache:
             return self.h_cache[state]
 
-        # Use a penalty if the same box configuration was seen before.
-        box_pos = frozenset((b[0], b[1]) for b in state[1])
-        if box_pos in self._seen_box_configs:
-            penalty = 100
-        else:
-            penalty = 0
-            self._seen_box_configs.add(box_pos)
-
         if self.is_deadlock(state):
             self.h_cache[state] = 10**6
             return 10**6
 
-        worker, boxes = state
-        # Build cost matrix: rows for boxes, columns for targets.
-        # cost = Manhattan distance * (1 + weight * 0.5)
-        cost_matrix = []
-        for bx, by, weight in boxes:
-            row = []
-            for tx, ty in self.targets:
-                d = abs(bx - tx) + abs(by - ty)
-                row.append(d * (1 + weight * 0.5))
-            cost_matrix.append(row)
-        # Compute the minimal assignment cost via DP.
-        assignment_cost = dp_assignment(cost_matrix)
-        computed_heuristic = assignment_cost + penalty
-        self.h_cache[state] = computed_heuristic
-        return computed_heuristic
+        # repeated-state penalty
+        box_positions = frozenset((b[0], b[1]) for b in state[1])
+        if box_positions in self._seen_box_configs:
+            penalty = 100
+        else:
+            penalty = 0
+            self._seen_box_configs.add(box_positions)
 
-# --------------------------------------------------
-# check_elem_action_seq: unchanged – works on elementary moves.
-# --------------------------------------------------
+        # build cost matrix (ManhattanDist * (1 + weight*0.5))
+        boxes = state[1]
+        cost_matrix = []
+        for (bx, by, w) in boxes:
+            row = []
+            for (tx, ty) in self.targets:
+                dist = abs(bx - tx) + abs(by - ty)
+                row.append(dist * (1 + 0.5 * w))
+            cost_matrix.append(row)
+
+        assignment_cost = dp_assignment(cost_matrix)
+        val = assignment_cost + penalty
+        self.h_cache[state] = val
+        return val
+
+# ------------------------------------------------------------------
+# check_elem_action_seq: unchanged.
+# ------------------------------------------------------------------
 def check_elem_action_seq(warehouse, action_seq):
-    '''
-    Check if the sequence of actions is legal.
-    Returns the final state (as a string) if legal; otherwise, "Impossible".
-    '''
+    """
+    Check if the sequence of actions is legal, returning "Impossible" or final layout as a string.
+    """
     warehouse_copy = warehouse.copy()
     moves = {
         "Left":  (-1, 0),
@@ -388,55 +420,43 @@ def check_elem_action_seq(warehouse, action_seq):
         "Down":  (0, 1)
     }
     worker_x, worker_y = warehouse_copy.worker
-    boxes = set(warehouse_copy.boxes)  
+    boxes = set(warehouse_copy.boxes)
     walls = set(warehouse_copy.walls)
     for action in action_seq:
         if action not in moves:
             return "Impossible"
         dx, dy = moves[action]
-        new_worker_x, new_worker_y = worker_x + dx, worker_y + dy
-        if (new_worker_x, new_worker_y) in walls:
+        nx, ny = worker_x + dx, worker_y + dy
+        # check walls
+        if (nx, ny) in walls:
             return "Impossible"
-        if (new_worker_x, new_worker_y) in boxes:
-            new_box_x, new_box_y = new_worker_x + dx, new_worker_y + dy
-            if (new_box_x, new_box_y) in walls or (new_box_x, new_box_y) in boxes:
+        # check boxes
+        if (nx, ny) in boxes:
+            n2x, n2y = nx + dx, ny + dy
+            if (n2x, n2y) in walls or (n2x, n2y) in boxes:
                 return "Impossible"
-            boxes.remove((new_worker_x, new_worker_y))
-            boxes.add((new_box_x, new_box_y))
-        worker_x, worker_y = new_worker_x, new_worker_y
+            boxes.remove((nx, ny))
+            boxes.add((n2x, n2y))
+        worker_x, worker_y = nx, ny
     warehouse_copy.worker = (worker_x, worker_y)
-    warehouse_copy.boxes = tuple(boxes)
+    warehouse_copy.boxes = tuple(sorted(boxes, key=lambda b: (b[1], b[0])))
     return str(warehouse_copy)
 
-# --------------------------------------------------
-# Helper: Flatten composite (macro) actions into elementary moves.
-# --------------------------------------------------
-def flatten_composite_actions(composite_actions):
-    """Given a list of composite actions (each with a list of elementary moves as first element),
-    return a single flattened list of moves."""
-    flattened = []
-    for comp in composite_actions:
-        elementary_moves = comp[0]
-        flattened.extend(elementary_moves)
-    return flattened
-
-# --------------------------------------------------
-# solve_weighted_sokoban: runs search and returns elementary moves.
-# --------------------------------------------------
+# ------------------------------------------------------------------
+# solve_weighted_sokoban: run A* with the above puzzle definition
+# ------------------------------------------------------------------
 def solve_weighted_sokoban(warehouse):
-    '''
-    Analyse the warehouse and return an action sequence (list of elementary moves) and its total cost.
-    
-    @param warehouse: a valid Warehouse object
-    @return: if unsolvable, ('Impossible', None); otherwise, (action_seq, total_cost)
-    '''
+    """
+    Solve the puzzle with single-step expansions and advanced heuristic.
+    Return (action_list, cost) or (['Impossible'], None) if unsolvable.
+    """
     problem = SokobanPuzzle(warehouse)
-    # Check if already solved.
+    # quick check if already solved
     if all((b[0], b[1]) in warehouse.targets for b in warehouse.boxes):
         return [], 0
+
     result = search.astar_graph_search(problem)
     if result is None:
         return ['Impossible'], None
-    composite_solution = result.solution()
-    elementary_solution = flatten_composite_actions(composite_solution)
-    return elementary_solution, result.path_cost
+
+    return result.solution(), result.path_cost
