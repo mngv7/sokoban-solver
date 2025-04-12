@@ -19,7 +19,7 @@ from sokoban import Warehouse
 import pytest
 
 try:
-    from fredSokobanSolver import taboo_cells, solve_weighted_sokoban, check_elem_action_seq
+    from mySokobanSolver import taboo_cells, solve_weighted_sokoban, check_elem_action_seq
     print("Using Fred's solver")
 except ModuleNotFoundError:
     from mySokobanSolver import taboo_cells, solve_weighted_sokoban, check_elem_action_seq

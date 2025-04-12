@@ -18,7 +18,7 @@ __version__ = "2.0"
 
 
 try:
-    from fredSokobanSolver import solve_weighted_sokoban
+    from mySokobanSolver import solve_weighted_sokoban
     print("Using Fred's solver")
 except ModuleNotFoundError:
     from mySokobanSolver import solve_weighted_sokoban

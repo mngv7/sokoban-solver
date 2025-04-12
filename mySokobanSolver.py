@@ -31,6 +31,15 @@ Last modified by 2021-08-17  by f.maire@qut.edu.au
 # with these files
 import search 
 import sokoban
+from collections import defaultdict
+
+# Predefined moves dictionary for consistency and speed.
+MOVES = {
+    "Left":  (-1, 0),
+    "Right": (1, 0),
+    "Up":    (0, -1),
+    "Down":  (0, 1)
+}
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -59,78 +68,78 @@ def find_2D_iterator_exclude(lines, *exclude_chars):
             yield (x, y)
 
 def get_corner_taboo_cells(candidate_taboo_cells, wall_cells):
-    corner_taboo_cells: set[tuple] = set()
-    for candidate_taboo_cell in candidate_taboo_cells:
-        x, y = candidate_taboo_cell
-        north = x, y - 1
-        east = x + 1, y
-        south = x, y + 1
-        west = x - 1, y
-
-        if (north in wall_cells and east in wall_cells) or \
-        (east in wall_cells and south in wall_cells) or \
-        (south in wall_cells and west in wall_cells) or \
-        (west in wall_cells and north in wall_cells):
+    corner_taboo_cells = set()
+    for (x, y) in candidate_taboo_cells:
+        north = (x, y - 1)
+        east  = (x + 1, y)
+        south = (x, y + 1)
+        west  = (x - 1, y)
+        if ((north in wall_cells and east in wall_cells) or
+            (east in wall_cells and south in wall_cells) or
+            (south in wall_cells and west in wall_cells) or
+            (west in wall_cells and north in wall_cells)):
             corner_taboo_cells.add((x, y))
     return corner_taboo_cells
 
 def get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells):
-    wall_taboo_cells: set[tuple] = set()
-
-    for corner1 in corner_taboo_cells:
-        for corner2 in corner_taboo_cells:
-            if corner1 == corner2:
-                continue
-
-            x1, y1 = corner1
-            x2, y2 = corner2
-
-            if x1 == x2:  # Same column (Vertical check)
-                if (x1, y1 - 1) in wall_cells and (x1, y2 + 1) in wall_cells:
-                    min_y, max_y = min(y1, y2), max(y1, y2)
-                    gap_count = 0
-                    last_was_gap = False
-                    is_valid = True
-                    for y in range(min_y + 1, max_y):
-                        if (x1, y) in taboo_row_nullifier:
+    wall_taboo_cells = set()
+    # Group corners by column for vertical segments.
+    corners_by_col = defaultdict(list)
+    for (x, y) in corner_taboo_cells:
+        corners_by_col[x].append(y)
+    for x, ys in corners_by_col.items():
+        ys.sort()
+        for i in range(len(ys) - 1):
+            y1, y2 = ys[i], ys[i+1]
+            # Check that a wall is above the top corner and below the lower one.
+            if (x, y1 - 1) in wall_cells and (x, y2 + 1) in wall_cells:
+                gap_count = 0
+                last_was_gap = False
+                is_valid = True
+                for y in range(y1 + 1, y2):
+                    if (x, y) in taboo_row_nullifier:
+                        is_valid = False
+                        break
+                    if ((x - 1, y) not in wall_cells and (x + 1, y) not in wall_cells):
+                        if last_was_gap:
                             is_valid = False
                             break
-                        if (x1 - 1, y) not in wall_cells and (x1 + 1, y) not in wall_cells:
-                            if last_was_gap:  # Two consecutive gaps
-                                is_valid = False
-                                break
-                            gap_count += 1
-                            last_was_gap = True
-                        else:
-                            last_was_gap = False
-                    if is_valid and gap_count <= 1:
-                        for y in range(min_y + 1, max_y):
-                            wall_taboo_cells.add((x1, y))
-
-            elif y1 == y2:  # Same row (Horizontal check)
-                if (x1 - 1, y1) in wall_cells and (x2 + 1, y1) in wall_cells:
-                    min_x, max_x = min(x1, x2), max(x1, x2)
-                    gap_count = 0
-                    last_was_gap = False
-                    is_valid = True
-                    for x in range(min_x + 1, max_x):
-                        if (x, y1) in taboo_row_nullifier:
+                        gap_count += 1
+                        last_was_gap = True
+                    else:
+                        last_was_gap = False
+                if is_valid and gap_count <= 1:
+                    for y in range(y1 + 1, y2):
+                        wall_taboo_cells.add((x, y))
+                        
+    # Group corners by row for horizontal segments.
+    corners_by_row = defaultdict(list)
+    for (x, y) in corner_taboo_cells:
+        corners_by_row[y].append(x)
+    for y, xs in corners_by_row.items():
+        xs.sort()
+        for i in range(len(xs) - 1):
+            x1, x2 = xs[i], xs[i+1]
+            if (x1 - 1, y) in wall_cells and (x2 + 1, y) in wall_cells:
+                gap_count = 0
+                last_was_gap = False
+                is_valid = True
+                for x in range(x1 + 1, x2):
+                    if (x, y) in taboo_row_nullifier:
+                        is_valid = False
+                        break
+                    if ((x, y - 1) not in wall_cells and (x, y + 1) not in wall_cells):
+                        if last_was_gap:
                             is_valid = False
                             break
-                        if (x, y1 - 1) not in wall_cells and (x, y1 + 1) not in wall_cells:
-                            if last_was_gap:  # Two consecutive gaps
-                                is_valid = False
-                                break
-                            gap_count += 1
-                            last_was_gap = True
-                        else:
-                            last_was_gap = False
-                    if is_valid and gap_count <= 1:
-                        for x in range(min_x + 1, max_x):
-                            wall_taboo_cells.add((x, y1))
-
+                        gap_count += 1
+                        last_was_gap = True
+                    else:
+                        last_was_gap = False
+                if is_valid and gap_count <= 1:
+                    for x in range(x1 + 1, x2):
+                        wall_taboo_cells.add((x, y))
     return wall_taboo_cells
-
 
 def get_taboo_cell_map(warehouse, taboo_cells):
     lines = [list(line) for line in str(warehouse).split('\n')]
@@ -177,14 +186,14 @@ def taboo_cells(warehouse):
     '''
     lines = str(warehouse).split('\n')
     wall_cells = set(warehouse.walls)
+    # Combine targets with positions from '*' and '#' to "nullify" rows
     taboo_row_nullifier = set(warehouse.targets) | set(find_2D_iterator(lines, '*')) | set(find_2D_iterator(lines, '#'))
     lines = [mark_outside_walls(line) for line in lines]
-
-    candidate_taboo_cells = set(find_2D_iterator_exclude(lines, '.', '#', '*', '?'))
     
+    candidate_taboo_cells = set(find_2D_iterator_exclude(lines, '.', '#', '*', '?'))
     corner_taboo_cells = get_corner_taboo_cells(candidate_taboo_cells, wall_cells)
     wall_taboo_cells = get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells)
-    taboo_cells = corner_taboo_cells | wall_taboo_cells
+    all_taboo_cells = corner_taboo_cells | wall_taboo_cells
 
     taboo_cell_map = get_taboo_cell_map(warehouse, taboo_cells)
 
@@ -218,102 +227,80 @@ class SokobanPuzzle(search.Problem):
     
     def __init__(self, warehouse):
         self.warehouse = warehouse
-        
         self.walls = set(warehouse.walls)
         self.targets = set(warehouse.targets)
-        #self.weights = {box: weight for box, weight in zip(warehouse.boxes, warehouse.weights)}
-        
-        # each box represented as (x, y, weight) tuple
-        boxes_with_weights = [(box[0], box[1], weight) for box, weight in zip(warehouse.boxes, warehouse.weights)]
+        # Each box is represented as a (x, y, weight) tuple.
+        boxes_with_weights = [(box[0], box[1], weight)
+                              for box, weight in zip(warehouse.boxes, warehouse.weights)]
         boxes_with_weights.sort(key=lambda b: (b[1], b[0]))
         self.initial = (warehouse.worker, tuple(boxes_with_weights))
-
-        #get tabboo cells
+        # Compute taboo cells from the warehouse drawing.
         taboo_map = taboo_cells(warehouse)
-        self.taboo_set = {
-            (j, i)
-            for i, line in enumerate(taboo_map.splitlines())
-            for j, ch in enumerate(line)
-            if ch == 'X'
-        }
+        self.taboo_set = {(j, i)
+                          for i, line in enumerate(taboo_map.splitlines())
+                          for j, ch in enumerate(line) if ch == 'X'}
+        # Pre-cache moves.
+        self._moves = MOVES
 
     def is_deadlock(self, state): #(unsolvable)
+        # Use set intersection: if any box (not on a target) lies in a taboo cell, it's a deadlock.
         _, boxes = state
-        for (bx, by, _) in boxes:
-            if (bx, by) in self.taboo_set and (bx, by) not in self.targets:
-                return True
-        return False
+        box_positions = {(bx, by) for bx, by, _ in boxes}
+        return bool(box_positions & (self.taboo_set - self.targets))
     
     
     def actions(self, state):
-        directions = ['Up', 'Down', 'Left', 'Right']
         (wx, wy), boxes = state
-        boxes_xy = {(b[0], b[1]) for b in boxes} # extract (x,y) positions from boxes
-        actions = []
-        moves = {'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1)}
-        for action in directions:
-            dx, dy = moves[action]
+        # Build a set of box positions for fast lookups.
+        boxes_xy = {(b[0], b[1]) for b in boxes}
+        available_actions = []
+        for action, (dx, dy) in self._moves.items():
             nx, ny = wx + dx, wy + dy
             if (nx, ny) in self.walls:
                 continue
             if (nx, ny) in boxes_xy:
+                # Calculate where the box would be pushed.
                 bnx, bny = nx + dx, ny + dy
                 if (bnx, bny) in boxes_xy or (bnx, bny) in self.walls:
                     continue
-                actions.append(action)
+                available_actions.append(action)
             else:
-                actions.append(action)
-        return actions
+                available_actions.append(action)
+        return available_actions
     
 
     def result(self, state, action):
         (wx, wy), boxes = state
-        boxes = list(boxes)
-        dx, dy = {'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1)}[action]
+        dx, dy = self._moves[action]
         new_worker = (wx + dx, wy + dy)
-        # if new_worker in boxes:
-        #     new_box = (new_worker[0] + dx, new_worker[1] + dy)
-        #     boxes.remove(new_worker)
-        #     boxes.append(new_box)
-
-        for i, (bx, by, w) in enumerate(boxes):
+        new_boxes = list(boxes)
+        # If the worker moves into a box, update its position.
+        for i, (bx, by, w) in enumerate(new_boxes):
             if (bx, by) == new_worker:
-                new_box = (bx + dx, by + dy, w)
-                boxes[i] = new_box
+                new_boxes[i] = (bx + dx, by + dy, w)
                 break
-        return (new_worker, tuple(sorted(boxes, key=lambda b: (b[1], b[0]))))
+        # Return state with boxes sorted to ensure a canonical form.
+        return (new_worker, tuple(sorted(new_boxes, key=lambda b: (b[1], b[0]))))
         
     def goal_test(self, state):
         _, boxes = state
-        return all((b[0], b[1]) in self.targets for b in boxes)
+        return all((bx, by) in self.targets for bx, by, _ in boxes)
 
     def path_cost(self, c, state1, action, state2):
-        _, b1 = state1
-        _, b2 = state2
-        # moved_box = set(b2) - set(b1)
-        # if moved_box:
-        #     box = moved_box.pop()
-        #     weight = self.weights.get(box, 0)
-        #     return c + 1 + weight
-        
-        moved_box = None
-        b1_xy = {(b[0], b[1]): b for b in b1}
-        b2_xy = {(b[0], b[1]): b for b in b2}
-        # identify  box that moved by comparing positions:
-        for pos, box in b2_xy.items():
-            if pos not in b1_xy:
-                moved_box = box
-                break
-        if moved_box:
-            return c + 1 + moved_box[2]
+        _, boxes1 = state1
+        _, boxes2 = state2
+        b1_dict = {(bx, by): (bx, by, w) for bx, by, w in boxes1}
+        for (bx, by, w) in boxes2:
+            if (bx, by) not in b1_dict:
+                return c + 1 + w
         return c + 1
   
     def h(self, node):
         if self.is_deadlock(node.state):
-            return 10**6  # remove deadlocked states by assigning a high cost.
-        
+            return 10**6  # A high cost to discourage deadlocks.
         _, boxes = node.state
-        return sum(min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets) for bx, by, _ in boxes)
+        return sum(min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets)
+                   for bx, by, _ in boxes)
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -343,25 +330,14 @@ def check_elem_action_seq(warehouse, action_seq):
     '''
     
     warehouse_copy = warehouse.copy()
-
-    #vectors for moving
-    moves = {
-        "Left": (-1, 0),
-        "Right": (1, 0),
-        "Up": (0, -1),
-        "Down": (0, 1)
-    }
-
     worker_x, worker_y = warehouse_copy.worker
-    boxes = set(warehouse_copy.boxes)  
+    boxes = set(warehouse_copy.boxes)
     walls = set(warehouse_copy.walls)
 
     for action in action_seq:
-        if action not in moves:
-            return "Impossible" 
-        
-        #calc new worker position:
-        dx, dy = moves[action]
+        if action not in MOVES:
+            return "Impossible"
+        dx, dy = MOVES[action]
         new_worker_x, new_worker_y = worker_x + dx, worker_y + dy
 
         if (new_worker_x, new_worker_y) in walls:
@@ -369,11 +345,8 @@ def check_elem_action_seq(warehouse, action_seq):
 
         if (new_worker_x, new_worker_y) in boxes:
             new_box_x, new_box_y = new_worker_x + dx, new_worker_y + dy
-
-            # if theres a wall or another box:
             if (new_box_x, new_box_y) in walls or (new_box_x, new_box_y) in boxes:
                 return "Impossible"
-
             boxes.remove((new_worker_x, new_worker_y))
             boxes.add((new_box_x, new_box_y))
 
@@ -381,7 +354,6 @@ def check_elem_action_seq(warehouse, action_seq):
 
     warehouse_copy.worker = (worker_x, worker_y)
     warehouse_copy.boxes = tuple(boxes)
-
     return str(warehouse_copy)
     
 
@@ -416,7 +388,7 @@ def solve_weighted_sokoban(warehouse):
     result = search.astar_graph_search(problem)
     
     if result is None:
-        return "Impossible", None
+        return "Impossible", 0
     
     return result.solution(), result.path_cost
     
