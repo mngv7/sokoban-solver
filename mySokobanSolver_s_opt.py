@@ -1,28 +1,39 @@
 """
     Sokoban assignment
 
-    [Original assignment header comments remain unchanged]
+    The functions and classes defined in this module will be called by a marker script.
+    You should complete the functions and classes according to their specified interfaces.
+    
+    Note: Do NOT change any function interfaces.
+    
+    Last modified by 2021-08-17 by f.maire@qut.edu.au
+    Updated below for optimization.
 """
 
 import search 
 import sokoban
 from collections import deque
-from itertools import combinations
+from itertools import combinations, permutations
 
 # Predefined constant for moves (used by several methods)
 MOVES = {'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1)}
 
 
 def my_team():
-    '''
+    """
     Return the list of the team members of this assignment submission as a list
     of triplet of the form (student_number, first_name, last_name)
-    '''
-    return [(11592931, 'Zackariya', 'Taylor'),
-            (11220139, 'Isobel', 'Jones'),
-            (1124744, 'Sophia', 'Sweet')]
+    """
+    return [
+        (11592931, 'Zackariya', 'Taylor'),
+        (11220139, 'Isobel', 'Jones'),
+        (1124744, 'Sophia', 'Sweet')
+    ]
 
-# -----------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Functions used to compute taboo cells and related iterators
+# ---------------------------------------------------------------------------
 
 from sokoban import find_2D_iterator
 
@@ -109,9 +120,11 @@ def mark_outside_walls(s):
     return '?' * first + s[first:last + 1] + '?' * (len(s) - last - 1)
 
 def taboo_cells(warehouse):
-    '''  
-    [Docstring omitted for brevity: It generates a map of taboo cells using Rule 1 and Rule 2.]
-    '''
+    """  
+    Identify taboo cells inside the warehouse.
+    Applies Rule 1 and Rule 2 for identifying taboo cells.
+    Returns a string representing the warehouse with walls as '#' and taboo cells as 'X'.
+    """
     lines = str(warehouse).split('\n')
     wall_cells = set(warehouse.walls)
     taboo_row_nullifier = set(warehouse.targets) | set(find_2D_iterator(lines, '*')) | set(find_2D_iterator(lines, '#'))
@@ -119,8 +132,13 @@ def taboo_cells(warehouse):
     candidate_taboo_cells = set(find_2D_iterator_exclude(lines, '.', '#', '*', '?'))
     corner_taboo_cells = get_corner_taboo_cells(candidate_taboo_cells, wall_cells)
     wall_taboo_cells = get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells)
-    taboo_set = corner_taboo_cells | wall_taboo_cells
-    return get_taboo_cell_map(warehouse, taboo_set)
+    all_taboo = corner_taboo_cells | wall_taboo_cells
+    return get_taboo_cell_map(warehouse, all_taboo)
+
+
+# ---------------------------------------------------------------------------
+# Helper function to compute reachable positions (BFS)
+# ---------------------------------------------------------------------------
 
 def get_reachable_positions(worker_pos, walls, boxes):
     visited = set()
@@ -136,13 +154,17 @@ def get_reachable_positions(worker_pos, walls, boxes):
                 frontier.append((nx, ny))
     return visited
 
-# -----------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# The Sokoban Puzzle Class
+# ---------------------------------------------------------------------------
 
 class SokobanPuzzle(search.Problem):
-    '''
-    An instance of SokobanPuzzle represents a Sokoban puzzle.
-    [Rest of docstring omitted for brevity]
-    '''
+    """
+    An instance of the SokobanPuzzle class represents a Sokoban puzzle.
+    An instance contains information about the walls, targets, boxes, and the worker.
+    This implementation is compatible with the search functions of the provided module search.py.
+    """
 
     def __init__(self, warehouse):
         self.warehouse = warehouse
@@ -151,37 +173,39 @@ class SokobanPuzzle(search.Problem):
         self.visited_box_states = set()
         self.deadlock_cache = {}
 
-        # each box is represented as (x, y, weight) tuple
+        # Each box is represented as (x, y, weight)
         boxes_with_weights = [(b[0], b[1], w) for b, w in zip(warehouse.boxes, warehouse.weights)]
         boxes_with_weights.sort(key=lambda b: (b[1], b[0]))
         self.initial = (warehouse.worker, tuple(boxes_with_weights))
         
         self._seen_box_configs = set()
-        self._reachable_cache = {}    # For caching reachable positions during search
-        self._manhattan_cache = {}    # For caching Manhattan distances from boxes to nearest target
-
+        self._reachable_cache = {}    # Cache for worker reachable positions
+        self._assignment_cache = {}   # Cache for box-to-target assignment cost
+        
         # Precompute taboo cells and build a lookup set
         taboo_map = taboo_cells(warehouse)
         self.taboo_set = {(j, i)
                           for i, line in enumerate(taboo_map.splitlines())
                           for j, ch in enumerate(line) if ch == 'X'}
+        # Precompute a sorted list of targets for consistent ordering in assignments
+        self.targets_list = sorted(list(self.targets))
 
     def __eq__(self, other):
         return isinstance(other, SokobanPuzzle) and self.initial == other.initial
 
     def __hash__(self):
-        return hash(self.initial)  # hash is based only on box positions
+        return hash(self.initial)  # only hash box positions
 
     def is_box_blocked(self, box_positions, box):
         x, y = box
         obstacles = self.walls.union(box_positions - {(x, y)})
-        if ((x - 1, y) in obstacles and (x, y - 1) in obstacles): 
+        if ((x - 1, y) in obstacles and (x, y - 1) in obstacles):
             return True
-        if ((x + 1, y) in obstacles and (x, y - 1) in obstacles): 
+        if ((x + 1, y) in obstacles and (x, y - 1) in obstacles):
             return True
-        if ((x - 1, y) in obstacles and (x, y + 1) in obstacles): 
+        if ((x - 1, y) in obstacles and (x, y + 1) in obstacles):
             return True
-        if ((x + 1, y) in obstacles and (x, y + 1) in obstacles): 
+        if ((x + 1, y) in obstacles and (x, y + 1) in obstacles):
             return True
         return False
 
@@ -204,24 +228,21 @@ class SokobanPuzzle(search.Problem):
         box_positions = frozenset((b[0], b[1]) for b in boxes)
         if box_positions in self.deadlock_cache:
             return self.deadlock_cache[box_positions]
-
         # Check for taboo deadlock (fatal)
         if any((bx, by) in self.taboo_set and (bx, by) not in self.targets for bx, by, _ in boxes):
             self.deadlock_cache[box_positions] = True
             return True
-
-        # Soft deadlocks (might be reversible)
+        # Soft deadlock: box blocked or frozen clusters may be reversible
         if any(self.is_box_blocked(box_positions, (bx, by)) for bx, by, _ in boxes):
             return True
-
         if self.has_frozen_clusters(box_positions):
             return True
-
         return False
 
     def get_reachable_cached(self, worker, boxes):
         """
-        Compute (or retrieve from cache) the set of reachable positions for the worker given current boxes.
+        Compute (or retrieve from cache) the set of reachable positions for the worker
+        given current box positions.
         """
         key = (worker, frozenset(boxes))
         if key not in self._reachable_cache:
@@ -229,29 +250,25 @@ class SokobanPuzzle(search.Problem):
         return self._reachable_cache[key]
 
     def actions(self, state):
-        # Do not generate actions if the state is in a taboo deadlock (unless it is the initial state)
         if self.is_taboo_deadlock(state) and state != self.initial:
             return []
         
         directions = ['Up', 'Down', 'Left', 'Right']
         (wx, wy), boxes = state
         boxes_xy = {(b[0], b[1]) for b in boxes}
-        # Use cached reachable positions for the worker to avoid repeated BFS computations
         reachable = self.get_reachable_cached((wx, wy), boxes_xy)
-        moves = MOVES  # using the pre-made constant
         actions = []
 
         for action in directions:
-            dx, dy = moves[action]
+            dx, dy = MOVES[action]
             nx, ny = wx + dx, wy + dy
             if (nx, ny) in self.walls:
                 continue
             if (nx, ny) in boxes_xy:
-                # Pushing a box: check if the cell beyond the box is free
                 bnx, bny = nx + dx, ny + dy
                 if (bnx, bny) in self.walls or (bnx, bny) in boxes_xy:
                     continue
-                if (wx, wy) in reachable:  # ensure worker can reach the pushing position
+                if (wx, wy) in reachable:
                     actions.append(action)
             else:
                 if (nx, ny) in reachable:
@@ -265,7 +282,6 @@ class SokobanPuzzle(search.Problem):
         new_worker = (wx + dx, wy + dy)
         for i, (bx, by, w) in enumerate(boxes):
             if (bx, by) == new_worker:
-                # move the box and maintain its weight
                 boxes[i] = (bx + dx, by + dy, w)
                 break
         return (new_worker, tuple(sorted(boxes, key=lambda b: (b[1], b[0]))))
@@ -277,62 +293,78 @@ class SokobanPuzzle(search.Problem):
     def path_cost(self, c, state1, action, state2):
         _, b1 = state1
         _, b2 = state2
-
         moved_box = None
         b1_xy = {(b[0], b[1]): b for b in b1}
         b2_xy = {(b[0], b[1]): b for b in b2}
-        # Identify the box that moved by comparing positions
         for pos, box in b2_xy.items():
             if pos not in b1_xy:
                 moved_box = box
                 break
         if moved_box:
-            # Add additional cost based on the box weight
             return c + 1 + moved_box[2]
         return c + 1
 
+    def compute_assignment_cost(self, boxes):
+        """
+        Computes the minimum total weighted Manhattan distance to assign each box to a unique target.
+        For a box-target pair the cost is: (Manhattan distance) * (1 + weight*0.5)
+        Uses cache to speed up repeated evaluations.
+        """
+        key = tuple(sorted(boxes, key=lambda b: (b[0], b[1], b[2])))
+        if key in self._assignment_cache:
+            return self._assignment_cache[key]
+        
+        n = len(boxes)
+        best = float('inf')
+        # Consider every permutation of targets for the boxes.
+        for assignment in permutations(self.targets_list, n):
+            total = 0
+            for (bx, by, weight), (tx, ty) in zip(boxes, assignment):
+                total += (abs(bx - tx) + abs(by - ty)) * (1 + weight * 0.5)
+                if total >= best:
+                    break  # early cutoff if cost already exceeds best
+            if total < best:
+                best = total
+        self._assignment_cache[key] = best
+        return best
+
     def h(self, node):
         state = node.state
-        box_pos = frozenset((b[0], b[1]) for b in state[1])
+        worker, boxes = state
+        box_positions = frozenset((b[0], b[1]) for b in boxes)
 
-        # Heavy penalty if the box configuration has already been seen
-        penalty = 100 if box_pos in self._seen_box_configs else 0
+        # Apply penalty if this box configuration has been seen before
+        penalty = 100 if box_positions in self._seen_box_configs else 0
         if penalty == 0:
-            self._seen_box_configs.add(box_pos)
+            self._seen_box_configs.add(box_positions)
 
-        if self.is_deadlock(node.state):
+        if self.is_deadlock(state):
             return 10**6
 
-        worker, boxes = node.state
-        box_cost = 0
+        # Use minimum assignment cost as a heuristic (more informed than individual Manhattan costs)
+        assignment_cost = self.compute_assignment_cost(boxes)
+        return assignment_cost + penalty
 
-        # For each box, add weighted Manhattan distance to the closest target.
-        # Cache distances so that repeated calls are fast.
-        for bx, by, weight in boxes:
-            if (bx, by) in self.targets:
-                continue
-            if (bx, by) not in self._manhattan_cache:
-                self._manhattan_cache[(bx, by)] = min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets)
-            d = self._manhattan_cache[(bx, by)]
-            box_cost += d * (1 + weight * 0.5)
 
-        return box_cost + penalty
-
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Sequence Checker and Solver functions (interface functions)
+# ---------------------------------------------------------------------------
 
 def check_elem_action_seq(warehouse, action_seq):
-    '''
-    [Docstring omitted for brevity]
-    '''
+    """
+    Determine if the sequence of actions in 'action_seq' is legal.
+    
+    Returns:
+      "Impossible" if an action is invalid.
+      Otherwise, returns the string representing the state of the puzzle after executing the sequence.
+    """
     warehouse_copy = warehouse.copy()
-
     moves = {
         "Left": (-1, 0),
         "Right": (1, 0),
         "Up": (0, -1),
         "Down": (0, 1)
     }
-
     worker_x, worker_y = warehouse_copy.worker
     boxes = set(warehouse_copy.boxes)
     walls = set(warehouse_copy.walls)
@@ -340,13 +372,10 @@ def check_elem_action_seq(warehouse, action_seq):
     for action in action_seq:
         if action not in moves:
             return "Impossible"
-
         dx, dy = moves[action]
         new_worker_x, new_worker_y = worker_x + dx, worker_y + dy
-
         if (new_worker_x, new_worker_y) in walls:
             return "Impossible"
-
         if (new_worker_x, new_worker_y) in boxes:
             new_box_x, new_box_y = new_worker_x + dx, new_worker_y + dy
             if (new_box_x, new_box_y) in walls or (new_box_x, new_box_y) in boxes:
@@ -357,19 +386,19 @@ def check_elem_action_seq(warehouse, action_seq):
 
     warehouse_copy.worker = (worker_x, worker_y)
     warehouse_copy.boxes = tuple(boxes)
-
     return str(warehouse_copy)
 
 def solve_weighted_sokoban(warehouse):
-    '''
-    [Docstring omitted for brevity]
-    '''
+    """
+    Analyzes the given warehouse and returns the solution for the weighted Sokoban puzzle.
+    
+    Returns:
+      If unsolvable: ('Impossible', None)
+      If solved: (solution action sequence, total cost)
+    """
     problem = SokobanPuzzle(warehouse)
-
-    # Quick check: if the puzzle is already solved.
     if all((b[0], b[1]) in warehouse.targets for b in warehouse.boxes):
         return [], 0
-
     result = search.astar_graph_search(problem)
     if result is None:
         return ['Impossible'], None
