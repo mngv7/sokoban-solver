@@ -26,7 +26,6 @@ import search
 import sokoban
 from collections import defaultdict, deque
 from itertools import combinations
-from functools import lru_cache
 
 # Predefined moves dictionary for consistency and speed.
 MOVES = {
@@ -73,49 +72,9 @@ def get_corner_taboo_cells(candidate_taboo_cells, wall_cells):
             corner_taboo_cells.add((x, y))
     return corner_taboo_cells
 
+# Disable wall-taboo cells (Rule 2) by returning an empty set.
 def get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells):
-    wall_taboo_cells = set()
-    # Vertical segments: group corners by column.
-    corners_by_col = defaultdict(list)
-    for (x, y) in corner_taboo_cells:
-        corners_by_col[x].append(y)
-    for x, ys in corners_by_col.items():
-        ys.sort()
-        for i in range(len(ys) - 1):
-            y1, y2 = ys[i], ys[i+1]
-            if (x, y1 - 1) in wall_cells and (x, y2 + 1) in wall_cells:
-                is_valid = True
-                for y in range(y1 + 1, y2):
-                    if (x, y) in taboo_row_nullifier:
-                        is_valid = False
-                        break
-                    if ((x - 1, y) not in wall_cells and (x + 1, y) not in wall_cells):
-                        is_valid = False
-                        break
-                if is_valid:
-                    for y in range(y1 + 1, y2):
-                        wall_taboo_cells.add((x, y))
-    # Horizontal segments: group corners by row.
-    corners_by_row = defaultdict(list)
-    for (x, y) in corner_taboo_cells:
-        corners_by_row[y].append(x)
-    for y, xs in corners_by_row.items():
-        xs.sort()
-        for i in range(len(xs) - 1):
-            x1, x2 = xs[i], xs[i+1]
-            if (x1 - 1, y) in wall_cells and (x2 + 1, y) in wall_cells:
-                is_valid = True
-                for x in range(x1 + 1, x2):
-                    if (x, y) in taboo_row_nullifier:
-                        is_valid = False
-                        break
-                    if ((x, y - 1) not in wall_cells and (x, y + 1) not in wall_cells):
-                        is_valid = False
-                        break
-                if is_valid:
-                    for x in range(x1 + 1, x2):
-                        wall_taboo_cells.add((x, y))
-    return wall_taboo_cells
+    return set()
 
 def get_taboo_cell_map(warehouse, taboo_cells):
     lines = [list(line) for line in str(warehouse).split('\n')]
@@ -141,13 +100,14 @@ def taboo_cells(warehouse):
     A "taboo cell" is a cell inside the warehouse such that whenever a box is pushed
     onto it, the puzzle becomes unsolvable.
     
-    Rules:
-      Rule 1: A cell is taboo if it is a corner (adjacent to two walls) and not a target.
-      Rule 2: All cells between two corners along a wall are taboo if none is a target.
+    Only walls and targets are taken into account (boxes are ignored).
+
+    Rule 1: A cell is taboo if it is a corner (adjacent to two walls) and not a target.
+    Rule 2: (Disabled) All cells between two corners along a wall are taboo.
     
     @param warehouse: a Warehouse object with a worker.
-    @return: A string representation of the warehouse with walls marked as '#' and taboo cells as 'X'.
-             (No worker, target, or box marks are included.)
+    @return: A string representing the warehouse with walls marked as '#' and taboo cells as 'X'.
+             (No worker, target, or box marks.)
     '''
     lines = str(warehouse).split('\n')
     wall_cells = set(warehouse.walls)
@@ -155,33 +115,14 @@ def taboo_cells(warehouse):
     lines = [mark_outside_walls(line) for line in lines]
     candidate_taboo_cells = set(find_2D_iterator_exclude(lines, '.', '#', '*', '?'))
     corner_taboo_cells = get_corner_taboo_cells(candidate_taboo_cells, wall_cells)
-    wall_taboo_cells = get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells)
-    computed_taboo_set = corner_taboo_cells | wall_taboo_cells
+    # Disabled: wall_taboo_cells = get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells)
+    computed_taboo_set = corner_taboo_cells  # Only use corner taboo cells.
     taboo_cell_map = get_taboo_cell_map(warehouse, computed_taboo_set)
     return taboo_cell_map
 
 # ---------------------------------------------------------------------
-# Optimize reachable positions with caching.
-@lru_cache(maxsize=10000)
-def _cached_reachable(worker, boxes, walls):
-    # worker: a tuple (x, y)
-    # boxes: a frozenset of box positions
-    # walls: a frozenset of wall positions (constant per warehouse)
-    frontier = deque([worker])
-    visited = set()
-    while frontier:
-        pos = frontier.popleft()
-        if pos in visited:
-            continue
-        visited.add(pos)
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            newpos = (pos[0] + dx, pos[1] + dy)
-            if newpos not in walls and newpos not in boxes and newpos not in visited:
-                frontier.append(newpos)
-    return frozenset(visited)
-
+# Use a simple non-cached BFS for reachability.
 def get_reachable_positions(worker_pos, walls, boxes):
-    # This fallback function (used by check_elem_action_seq) runs a basic BFS.
     visited = set()
     frontier = deque([worker_pos])
     while frontier:
@@ -189,7 +130,7 @@ def get_reachable_positions(worker_pos, walls, boxes):
         if pos in visited:
             continue
         visited.add(pos)
-        for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
             newpos = (pos[0] + dx, pos[1] + dy)
             if newpos not in walls and newpos not in boxes and newpos not in visited:
                 frontier.append(newpos)
@@ -205,7 +146,6 @@ class SokobanPuzzle(search.Problem):
     def __init__(self, warehouse):
         self.warehouse = warehouse
         self.walls = set(warehouse.walls)
-        self.walls_frozenset = frozenset(warehouse.walls)  # For fast lookup in cached reachability.
         self.targets = set(warehouse.targets)
         self.visited_box_states = set()
         self.deadlock_cache = {}
@@ -228,20 +168,12 @@ class SokobanPuzzle(search.Problem):
     def __hash__(self):
         return hash(self.initial)
 
+    # Disable the box blocked check.
     def is_box_blocked(self, box_positions, box):
-        x, y = box
-        obstacles = self.walls.union(box_positions - {(x, y)})
-        if ((x - 1, y) in obstacles and (x, y - 1) in obstacles): return True
-        if ((x + 1, y) in obstacles and (x, y - 1) in obstacles): return True
-        if ((x - 1, y) in obstacles and (x, y + 1) in obstacles): return True
-        if ((x + 1, y) in obstacles and (x, y + 1) in obstacles): return True
         return False
 
+    # Disable the frozen cluster check.
     def has_frozen_clusters(self, box_positions):
-        for b1, b2 in combinations(box_positions, 2):
-            if abs(b1[0] - b2[0]) + abs(b1[1] - b2[1]) == 1:
-                if self.is_box_blocked(box_positions, b1) and self.is_box_blocked(box_positions, b2):
-                    return True
         return False
 
     def is_taboo_deadlock(self, state):
@@ -266,18 +198,14 @@ class SokobanPuzzle(search.Problem):
         return False
 
     def actions(self, state):
-        # If a state is clearly deadlocked via taboo configuration, do not generate actions.
         if self.is_taboo_deadlock(state) and state != self.initial:
             return []
         (wx, wy), boxes = state
         boxes_xy = {(b[0], b[1]) for b in boxes}
-        # Use the cached reachability function.
         worker = (wx, wy)
-        boxes_fro = frozenset(boxes_xy)
-        reachable = _cached_reachable(worker, boxes_fro, self.walls_frozenset)
-        moves = self._moves
+        reachable = get_reachable_positions(worker, self.walls, boxes_xy)
         available_actions = []
-        for action, (dx, dy) in moves.items():
+        for action, (dx, dy) in self._moves.items():
             nx, ny = wx + dx, wy + dy
             if (nx, ny) in self.walls:
                 continue
@@ -285,7 +213,6 @@ class SokobanPuzzle(search.Problem):
                 bnx, bny = nx + dx, ny + dy
                 if (bnx, bny) in self.walls or (bnx, bny) in boxes_xy:
                     continue
-                # Check that the worker can reach the pushing position.
                 if worker in reachable:
                     available_actions.append(action)
             else:
@@ -320,7 +247,8 @@ class SokobanPuzzle(search.Problem):
     def h(self, node):
         state = node.state
         box_pos = frozenset((b[0], b[1]) for b in state[1])
-        penalty = 100 if box_pos in self._seen_box_configs else 0
+        # Use a lower penalty value.
+        penalty = 10 if box_pos in self._seen_box_configs else 0
         if not penalty:
             self._seen_box_configs.add(box_pos)
         if self.is_deadlock(node.state):
