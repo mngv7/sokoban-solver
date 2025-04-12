@@ -31,8 +31,7 @@ Last modified by 2021-08-17  by f.maire@qut.edu.au
 # with these files
 import search 
 import sokoban
-from collections import defaultdict
-from sokoban import find_2D_iterator
+
 
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -48,6 +47,8 @@ def my_team():
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+from sokoban import find_2D_iterator
+
 def find_1D_iterator_exclude(line, *exclude_chars):
     for pos, char in enumerate(line):
         if char not in exclude_chars:
@@ -59,77 +60,64 @@ def find_2D_iterator_exclude(lines, *exclude_chars):
             yield (x, y)
 
 def get_corner_taboo_cells(candidate_taboo_cells, wall_cells):
-    corner_taboo_cells = set()
-    for (x, y) in candidate_taboo_cells:
-        north = (x, y - 1)
-        east  = (x + 1, y)
-        south = (x, y + 1)
-        west  = (x - 1, y)
-        if ((north in wall_cells and east in wall_cells) or
-            (east in wall_cells and south in wall_cells) or
-            (south in wall_cells and west in wall_cells) or
-            (west in wall_cells and north in wall_cells)):
+    corner_taboo_cells: set[tuple] = set()
+    for candidate_taboo_cell in candidate_taboo_cells:
+        x, y = candidate_taboo_cell
+        north = x, y - 1
+        east = x + 1, y
+        south = x, y + 1
+        west = x - 1, y
+
+        if (north in wall_cells and east in wall_cells) or \
+        (east in wall_cells and south in wall_cells) or \
+        (south in wall_cells and west in wall_cells) or \
+        (west in wall_cells and north in wall_cells):
             corner_taboo_cells.add((x, y))
     return corner_taboo_cells
 
-
 def get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells):
-    wall_taboo_cells = set()
-    # Group corners by column for vertical segments.
-    corners_by_col = defaultdict(list)
-    for (x, y) in corner_taboo_cells:
-        corners_by_col[x].append(y)
-    for x, ys in corners_by_col.items():
-        ys.sort()
-        for i in range(len(ys) - 1):
-            y1, y2 = ys[i], ys[i+1]
-            if (x, y1 - 1) in wall_cells and (x, y2 + 1) in wall_cells:
-                gap_count = 0
-                last_was_gap = False
-                is_valid = True
-                for y in range(y1 + 1, y2):
-                    if (x, y) in taboo_row_nullifier:
-                        is_valid = False
-                        break
-                    if ((x - 1, y) not in wall_cells and (x + 1, y) not in wall_cells):
-                        if last_was_gap:
-                            is_valid = False
-                            break
-                        gap_count += 1
-                        last_was_gap = True
-                    else:
-                        last_was_gap = False
-                if is_valid and gap_count <= 1:
-                    for y in range(y1 + 1, y2):
-                        wall_taboo_cells.add((x, y))
+    wall_taboo_cells: set[tuple] = set()
 
-            # Group corners by row for horizontal segments.
-    corners_by_row = defaultdict(list)
-    for (x, y) in corner_taboo_cells:
-        corners_by_row[y].append(x)
-    for y, xs in corners_by_row.items():
-        xs.sort()
-        for i in range(len(xs) - 1):
-            x1, x2 = xs[i], xs[i+1]
-            if (x1 - 1, y) in wall_cells and (x2 + 1, y) in wall_cells:
-                gap_count = 0
-                last_was_gap = False
-                is_valid = True
-                for x in range(x1 + 1, x2):
-                    if (x, y) in taboo_row_nullifier:
-                        is_valid = False
-                        break
-                    if ((x, y - 1) not in wall_cells and (x, y + 1) not in wall_cells):
-                        if last_was_gap:
+    for corner1 in corner_taboo_cells:
+        for corner2 in corner_taboo_cells:
+            if corner1 == corner2:
+                continue
+
+            x1, y1 = corner1
+            x2, y2 = corner2
+
+            if x1 == x2:  # Same column (vertical check)
+                if (x1, y1 - 1) in wall_cells and (x1, y2 + 1) in wall_cells:
+                    min_y, max_y = min(y1, y2), max(y1, y2)
+                    is_valid = True
+                    for y in range(min_y + 1, max_y):
+                        if (x1, y) in taboo_row_nullifier:
                             is_valid = False
                             break
-                        gap_count += 1
-                        last_was_gap = True
-                    else:
-                        last_was_gap = False
-                if is_valid and gap_count <= 1:
-                    for x in range(x1 + 1, x2):
-                        wall_taboo_cells.add((x, y))
+                        if (x1 - 1, y) not in wall_cells and (x1 + 1, y) not in wall_cells:
+                            # If no walls on either side, gap detected
+                            is_valid = False
+                            break
+                    if is_valid:
+                        for y in range(min_y + 1, max_y):
+                            wall_taboo_cells.add((x1, y))
+
+            elif y1 == y2:  # Same row (horizontal check)
+                if (x1 - 1, y1) in wall_cells and (x2 + 1, y1) in wall_cells:
+                    min_x, max_x = min(x1, x2), max(x1, x2)
+                    is_valid = True
+                    for x in range(min_x + 1, max_x):
+                        if (x, y1) in taboo_row_nullifier:
+                            is_valid = False
+                            break
+                        if (x, y1 - 1) not in wall_cells and (x, y1 + 1) not in wall_cells:
+                            # If no walls above or below, gap detected
+                            is_valid = False
+                            break
+                    if is_valid:
+                        for x in range(min_x + 1, max_x):
+                            wall_taboo_cells.add((x, y1))
+
     return wall_taboo_cells
 
 
