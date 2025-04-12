@@ -1,5 +1,7 @@
-"""
+'''
+
     Sokoban assignment
+
 
 The functions and classes defined in this module will be called by a marker script. 
 You should complete the functions and classes according to their specified interfaces.
@@ -10,288 +12,644 @@ of the interfaces.
 You are NOT allowed to change the defined interfaces.
 In other words, you must fully adhere to the specifications of the 
 functions, their arguments and returned values.
-Changing the interface of a function will likely result in a fail 
+Changing the interfacce of a function will likely result in a fail 
 for the test of your code. This is not negotiable! 
 
 You have to make sure that your code works with the files provided 
 (search.py and sokoban.py) as your code will be tested 
 with the original copies of these files. 
 
-Last modified by 2021-08-17  by f.maire@qut.edu.au
+Last modified by 2022-03-27  by f.maire@qut.edu.au
 - clarifiy some comments, rename some functions
   (and hopefully didn't introduce any bug!)
-"""
 
-import search
+'''
+
+# You have to make sure that your code works with 
+# the files provided (search.py and sokoban.py) as your code will be tested 
+# with these files
+import search 
 import sokoban
-from collections import defaultdict, deque
-from itertools import combinations
+from sokoban import find_2D_iterator
+from collections import deque
+from search import Node
+import time
 
-# Predefined moves dictionary for consistency and speed.
-MOVES = {
-    "Left":  (-1, 0),
-    "Right": (1, 0),
-    "Up":    (0, -1),
-    "Down":  (0, 1)
-}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-# ---------------------------------------------------------------------
+
 def my_team():
     '''
     Return the list of the team members of this assignment submission as a list
-    of triplets of the form (student_number, first_name, last_name)
+    of triplet of the form (student_number, first_name, last_name)
+    
     '''
-    return [(11592931, 'Zackariya', 'Taylor'),
-            (11220139, 'Isobel', 'Jones'),
-            (1124744, 'Sophia', 'Sweet')]
+    return [ "trial"]
 
-# ---------------------------------------------------------------------
-from sokoban import find_2D_iterator
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-def find_1D_iterator_exclude(line, *exclude_chars):
-    for pos, char in enumerate(line):
-        if char not in exclude_chars:
-            yield pos
 
-def find_2D_iterator_exclude(lines, *exclude_chars):
-    for y, line in enumerate(lines):
-        for x in find_1D_iterator_exclude(line, *exclude_chars):
-            yield (x, y)
 
-def get_corner_taboo_cells(candidate_taboo_cells, wall_cells):
-    corner_taboo_cells = set()
-    for (x, y) in candidate_taboo_cells:
-        north = (x, y - 1)
-        east  = (x + 1, y)
-        south = (x, y + 1)
-        west  = (x - 1, y)
-        if ((north in wall_cells and east in wall_cells) or
-            (east in wall_cells and south in wall_cells) or
-            (south in wall_cells and west in wall_cells) or
-            (west in wall_cells and north in wall_cells)):
-            corner_taboo_cells.add((x, y))
-    return corner_taboo_cells
-
-# Disable wall-taboo cells (Rule 2) by returning an empty set.
-def get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells):
-    return set()
-
-def get_taboo_cell_map(warehouse, taboo_cells):
-    lines = [list(line) for line in str(warehouse).split('\n')]
-    for i, line in enumerate(lines):
-        for j in range(len(line)):
-            if (j, i) in taboo_cells:
-                line[j] = 'X'
-            elif line[j] not in {'#', ' '}:
-                line[j] = ' '
-    return "\n".join("".join(line) for line in lines)
-
-def mark_outside_walls(s):
-    first = s.find('#')
-    last = s.rfind('#')
-    if first == -1 or last == -1:
-        return s  
-    return '?' * first + s[first:last + 1] + '?' * (len(s) - last - 1)
 
 def taboo_cells(warehouse):
     '''  
-    Identify the taboo cells of a warehouse.
+    Identify the taboo cells of a warehouse. A "taboo cell" is by definition
+    a cell inside a warehouse such that whenever a box get pushed on such 
+    a cell then the puzzle becomes unsolvable. 
     
-    A "taboo cell" is a cell inside the warehouse such that whenever a box is pushed
-    onto it, the puzzle becomes unsolvable.
+    Cells outside the warehouse are not taboo. It is a fail to tag an 
+    outside cell as taboo.
     
-    Only walls and targets are taken into account (boxes are ignored).
-
-    Rule 1: A cell is taboo if it is a corner (adjacent to two walls) and not a target.
-    Rule 2: (Disabled) All cells between two corners along a wall are taboo.
+    When determining the taboo cells, you must ignore all the existing boxes, 
+    only consider the walls and the target cells.  
+    Use only the following rules to determine the taboo cells;
+     Rule 1: if a cell is a corner and not a target, then it is a taboo cell.
+     Rule 2: all the cells between two corners along a wall are taboo if none of 
+             these cells is a target.
     
-    @param warehouse: a Warehouse object with a worker.
-    @return: A string representing the warehouse with walls marked as '#' and taboo cells as 'X'.
-             (No worker, target, or box marks.)
-    '''
-    lines = str(warehouse).split('\n')
-    wall_cells = set(warehouse.walls)
-    taboo_row_nullifier = set(warehouse.targets) | set(find_2D_iterator(lines, '*')) | set(find_2D_iterator(lines, '#'))
-    lines = [mark_outside_walls(line) for line in lines]
-    candidate_taboo_cells = set(find_2D_iterator_exclude(lines, '.', '#', '*', '?'))
-    corner_taboo_cells = get_corner_taboo_cells(candidate_taboo_cells, wall_cells)
-    # Disabled: wall_taboo_cells = get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells)
-    computed_taboo_set = corner_taboo_cells  # Only use corner taboo cells.
-    taboo_cell_map = get_taboo_cell_map(warehouse, computed_taboo_set)
-    return taboo_cell_map
+    @param warehouse: 
+        a Warehouse object with the worker inside the warehouse
 
-# ---------------------------------------------------------------------
-# Use a simple non-cached BFS for reachability.
-def get_reachable_positions(worker_pos, walls, boxes):
-    visited = set()
-    frontier = deque([worker_pos])
-    while frontier:
-        pos = frontier.popleft()
-        if pos in visited:
-            continue
-        visited.add(pos)
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            newpos = (pos[0] + dx, pos[1] + dy)
-            if newpos not in walls and newpos not in boxes and newpos not in visited:
-                frontier.append(newpos)
-    return visited
-
-# ---------------------------------------------------------------------
-class SokobanPuzzle(search.Problem):
+    @return
+       A string representing the warehouse with only the wall cells marked with 
+       a '#' and the taboo cells marked with a 'X'.  
+       The returned string should NOT have marks for the worker, the targets,
+       and the boxes.  
     '''
-    An instance of 'SokobanPuzzle' represents a Sokoban puzzle.
-    It contains the walls, targets, boxes (with weights), and the worker.
-    This implementation is fully compatible with the search functions in search.py.
-    '''
-    def __init__(self, warehouse):
-        self.warehouse = warehouse
-        self.walls = set(warehouse.walls)
-        self.targets = set(warehouse.targets)
-        self.visited_box_states = set()
-        self.deadlock_cache = {}
-        # Each box is represented as (x, y, weight)
-        boxes_with_weights = [(box[0], box[1], weight)
-                              for box, weight in zip(warehouse.boxes, warehouse.weights)]
-        boxes_with_weights.sort(key=lambda b: (b[1], b[0]))
-        self.initial = (warehouse.worker, tuple(boxes_with_weights))
-        self._seen_box_configs = set()
-        # Compute taboo cells.
-        taboo_map = taboo_cells(warehouse)
-        self.taboo_set = {(j, i)
-                          for i, line in enumerate(taboo_map.splitlines())
-                          for j, ch in enumerate(line) if ch == 'X'}
-        self._moves = MOVES
+    squares_to_remove = ['@', '$']
+    target_squares = ['!', '.', '*']
+    wall_square = '#'
+    taboo_square = 'X'
 
-    def __eq__(self, other):
-        return isinstance(other, SokobanPuzzle) and self.initial == other.initial
+    def is_corner(warehouse, x, y, wall=None):
+        '''
+        
+
+        Parameters
+        ----------
+        warehouse : warehouse object
+        x : x coordinate
+        y : y coordinate
+        wall : ensure that a wall coordinate isn't being passed
+
+        Returns
+        -------
+        Boolean indicating if the given cell is a corner
+
+        '''
+        num_ud_walls = 0
+        num_lr_walls = 0
+        # check for walls above and below
+        for (dx, dy) in [(0, 1), (0, -1)]:
+            if warehouse[y + dy][x + dx] == wall_square:
+                num_ud_walls += 1
+        # check for walls left and right
+        for (dx, dy) in [(1, 0), (-1, 0)]:
+            if warehouse[y + dy][x + dx] == wall_square:
+                num_lr_walls += 1
+        if wall:
+            return (num_ud_walls >= 1) or (num_lr_walls >= 1)
+        else:
+            return (num_ud_walls >= 1) and (num_lr_walls >= 1)
+
+    # string representation
+    warehouse_str = str(warehouse)
+
+    # remove anything that isn't a wall or a target
+    for char in squares_to_remove:
+        warehouse_str = warehouse_str.replace(char, ' ')
+
+    # convert warehouse string into 2D array
+    warehouse_2d = [list(line) for line in warehouse_str.split('\n')]
+
+    # apply rule 1
+    for y in range(len(warehouse_2d) - 1):
+        inside = False
+        for x in range(len(warehouse_2d[0]) - 1):
+            # iterate until the first wall is found, indicating inside the warehouse
+            if not inside:
+                if warehouse_2d[y][x] == wall_square:
+                    inside = True
+            else:
+                # check if all cells to the right of current cell are empty, indicating outside the warehouse
+                if all([cell == ' ' for cell in warehouse_2d[y][x:]]):
+                    break
+                if warehouse_2d[y][x] not in target_squares:
+                    if warehouse_2d[y][x] != wall_square:
+                        if is_corner(warehouse_2d, x, y):
+                            warehouse_2d[y][x] = taboo_square
+
+    # apply rule 2
+    for y in range(1, len(warehouse_2d) - 1):
+        for x in range(1, len(warehouse_2d[0]) - 1):
+            if warehouse_2d[y][x] == taboo_square \
+                    and is_corner(warehouse_2d, x, y):
+                row = warehouse_2d[y][x + 1:]
+                col = [row[x] for row in warehouse_2d[y + 1:][:]]
+                # fill in taboo cells in the row to the right of the current cell
+                for x2 in range(len(row)):
+                    if row[x2] in target_squares or row[x2] == wall_square:
+                        break
+                    if row[x2] == taboo_square \
+                            and is_corner(warehouse_2d, x2 + x + 1, y):
+                        if all([is_corner(warehouse_2d, x3, y, 1)
+                                for x3 in range(x + 1, x2 + x + 1)]):
+                            for x4 in range(x + 1, x2 + x + 1):
+                                warehouse_2d[y][x4] = 'X'
+                # fill in taboo cells underneath the column of the current cell
+                for y2 in range(len(col)):
+                    if col[y2] in target_squares or col[y2] == wall_square:
+                        break
+                    if col[y2] == taboo_square \
+                            and is_corner(warehouse_2d, x, y2 + y + 1):
+                        if all([is_corner(warehouse_2d, x, y3, 1)
+                                for y3 in range(y + 1, y2 + y + 1)]):
+                            for y4 in range(y + 1, y2 + y + 1):
+                                warehouse_2d[y4][x] = 'X'
+
+    # convert 2D array back into string
+    warehouse_str = '\n'.join([''.join(line) for line in warehouse_2d])
+
+    # remove the remaining target_squares
+    for char in target_squares:
+        warehouse_str = warehouse_str.replace(char, ' ')
+    return warehouse_str
+
+
+
+
+
+
+
+
+
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+
+def manhattanDistance(p1, p2):
+    '''
+    
+
+    Parameters
+    ----------
+    p1 : point 1
+    p2 : point 2
+
+    Returns
+    -------
+    the manhattan distance between points 1 and 2
+
+    '''
+    return abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
+
+def offsetToDirection(offset):
+    '''
+    
+
+    Parameters
+    ----------
+    offset : Offset of the occupant's current location to their target location
+
+    Raises
+    ------
+    ValueError
+        Raises if the offset isn't in a valid direction
+
+    Returns
+    -------
+    str
+        The direction from the occupan's location to their target location
+
+    '''
+    if offset == (1,0):
+        return 'Right'
+    elif offset == (0,1):
+        return 'Down'
+    elif offset == (-1,0):
+        return 'Left'
+    elif offset == (0,-1):
+        return 'Up'
+    else:
+        raise ValueError("Invalid offset")
+        
+def directionToOffset(direction):
+    '''
+    
+
+    Parameters
+    ----------
+    direction : string
+        String representation of direction
+
+    Raises
+    ------
+    ValueError
+        Raises if an invalid direction is passed
+
+    Returns
+    -------
+    tuple
+       Offset relative to the direction
+
+    '''
+    if direction == 'Right':
+        return (1,0)
+    elif direction == 'Down':
+        return (0,1)
+    elif direction == 'Left':
+        return (-1,0)
+    elif direction == 'Up':
+        return (0,-1)
+    else:
+        raise ValueError("Invalid direction")
+        
+
+def canMove(state, offset):
+    '''
+    
+
+    Parameters
+    ----------
+    state : list
+        list of strings representing the warehouse map
+    offset : tuple
+        offset for the worker to be moved by
+
+    Raises
+    ------
+    ValueError
+        Raises if no worker is found in the given warehouse state
+
+    Returns
+    -------
+    Boolean
+        Indicates if the worker can move in that direction
+
+    '''
+    try:
+        worker_position = next(find_2D_iterator(state, '@'))
+    except StopIteration:
+        try:
+            worker_position = next(find_2D_iterator(state, '!'))
+        except:
+            raise ValueError("No worker found in the given state.")
+        
+
+    new_x = worker_position[0] + offset[0]
+    new_y = worker_position[1] + offset[1]
+
+    # Check if new worker position is out of bounds
+    if new_y < 0 or new_y >= len(state) or new_x < 0 or new_x >= len(state[new_y]):
+        return False
+
+    occupant = state[new_y][new_x]
+
+    if occupant in ' .':  # Worker can move to an empty space or target
+        return True
+    elif occupant == '$':  # There's a box in the worker's way
+        push_x = new_x + offset[0]
+        push_y = new_y + offset[1]
+
+        # Check if the new box position is out of bounds
+        if push_y < 0 or push_y >= len(state) or push_x < 0 or push_x >= len(state[push_y]):
+            return False
+
+        next_occupant = state[push_y][push_x]
+        # Box can be pushed if the next cell is empty or a target, and it's not a taboo cell
+        return next_occupant in ' .' and (push_x, push_y) not in tabooCells
+
+    return False
+
+def findOccupant(state, coords):
+    '''
+    
+
+    Parameters
+    ----------
+    state : list
+        List of strings representing the warehouse map state
+    coords : tuple
+        Coordinates of the cell to check
+
+    Raises
+    ------
+    ValueError
+        Raises if invalid coordinates are passed
+
+    Returns
+    -------
+    char
+        Character designation for the occupant of the cell
+
+    '''
+    x,y = coords
+    if (0 <= x < len(state[y])) and (0 <= y < len(state)):
+        return state[y][x]
+    else:
+        raise ValueError("Incorrect coordinates passed")
+        
+def parseState(state):
+    '''
+    
+
+    Parameters
+    ----------
+    state : list
+        List of strings representing the warehouse map state
+
+    Returns
+    -------
+    boxes : list
+        A list of the coordinates with boxes found in the state sorted by said coordinates
+
+    '''
+    boxes = list(find_2D_iterator(state, '$'))
+    boxes.sort(key=lambda x: (x[1], x[0]))
+    
+    return boxes
+    
+    
+offsets = [(1,0),(0,1),(-1,0),(0,-1)]
+
+class HashableState:
+    '''
+    This class defines a hashable and immutable state that can be passed to a Node
+    without raising any errors about data types. It takes a string representation of the warehouse and a
+    list of dictionaries for each box in said warehouse, and then converts this data into a workable type
+    for the given search algorithms. Getter methods have been included to then receive this data back from instances of 
+    this object, along with methods for comparison and equivalence checks
+    '''
+    def __init__(self, state):
+        self.map = state[0]
+        self.box_weights_dict = tuple(frozenset(d.items()) for d in state[1])
 
     def __hash__(self):
-        return hash(self.initial)
+        return hash((self.map, self.box_weights_dict))
 
-    # Disable the box blocked check.
-    def is_box_blocked(self, box_positions, box):
-        return False
+    def __eq__(self, other):
+        return (self.map, self.box_weights_dict) == (other.map, other.box_weights_dict)
 
-    # Disable the frozen cluster check.
-    def has_frozen_clusters(self, box_positions):
-        return False
+    def __lt__(self, other):
+        # Perform 'comparison' (stop Node class from trying to compare two HashableState instances)
+        return self.map < other.map
 
-    def is_taboo_deadlock(self, state):
-        _, boxes = state
-        for bx, by, _ in boxes:
-            if (bx, by) in self.taboo_set and (bx, by) not in self.targets:
-                return True
-        return False
+    def get_dict(self):
+        return [dict(d) for d in self.box_weights_dict]
 
-    def is_deadlock(self, state):
-        _, boxes = state
-        box_positions = frozenset((b[0], b[1]) for b in boxes)
-        if box_positions in self.deadlock_cache:
-            return self.deadlock_cache[box_positions]
-        if any((bx, by) in self.taboo_set and (bx, by) not in self.targets for bx, by, _ in boxes):
-            self.deadlock_cache[box_positions] = True
-            return True
-        if any(self.is_box_blocked(box_positions, (bx, by)) for bx, by, _ in boxes):
-            return True
-        if self.has_frozen_clusters(box_positions):
-            return True
-        return False
+    def get_map(self):
+        return self.map
+
+    # for debugging purposes
+    def __str__(self):
+        return f"The map is {self.map}\nthe dictionary is {list(self.box_weights_dict)}"
+
+
+class SokobanPuzzle(search.Problem):
+    '''
+    An instance of the class 'SokobanPuzzle' represents a Sokoban puzzle.
+    An instance contains information about the walls, the targets, the boxes
+    and the worker.
+
+    Your implementation should be fully compatible with the search functions of 
+    the provided module 'search.py'. 
+    
+    '''
+    
+    def __init__(self, warehouse):
+        if warehouse is None:
+            raise FileNotFoundError
+        elif warehouse:
+            global tabooCells
+            tabooCells = set(find_2D_iterator(taboo_cells(warehouse).split("\n"), "X"))
+            warehouse_str = str(warehouse)
+
+            dynamicBoxes = [{'id': index, 'coord': box, 'weight': weight}
+                for index, (box, weight) in enumerate(zip(warehouse.boxes, warehouse.weights))] # list of dictionaries for each box with a unique identifier
+
+    
+            self.initial = HashableState((warehouse_str, dynamicBoxes)) # create hashable and immutable datatype to be passed as the state
+            self.goal = sorted(warehouse.targets, key=lambda x: (x[1], x[0]))
+            self.walls = warehouse.walls
+            self.targets = warehouse.targets
+        
 
     def actions(self, state):
-        if self.is_taboo_deadlock(state) and state != self.initial:
-            return []
-        (wx, wy), boxes = state
-        boxes_xy = {(b[0], b[1]) for b in boxes}
-        worker = (wx, wy)
-        reachable = get_reachable_positions(worker, self.walls, boxes_xy)
-        available_actions = []
-        for action, (dx, dy) in self._moves.items():
-            nx, ny = wx + dx, wy + dy
-            if (nx, ny) in self.walls:
-                continue
-            if (nx, ny) in boxes_xy:
-                bnx, bny = nx + dx, ny + dy
-                if (bnx, bny) in self.walls or (bnx, bny) in boxes_xy:
-                    continue
-                if worker in reachable:
-                    available_actions.append(action)
-            else:
-                if (nx, ny) in reachable:
-                    available_actions.append(action)
-        return available_actions
-
+        """
+        Return the list of actions that can be executed in the given state.
+        
+        """
+        state = state.get_map().splitlines()
+        possibleActions = []
+        for offset in offsets:
+            if canMove(state, offset):
+                possibleActions.append(offsetToDirection(offset))
+        return possibleActions
+    
     def result(self, state, action):
-        (wx, wy), boxes = state
-        dx, dy = self._moves[action]
-        new_worker = (wx + dx, wy + dy)
-        new_boxes = list(boxes)
-        for i, (bx, by, w) in enumerate(new_boxes):
-            if (bx, by) == new_worker:
-                new_boxes[i] = (bx + dx, by + dy, w)
-                break
-        return (new_worker, tuple(sorted(new_boxes, key=lambda b: (b[1], b[0]))))
+        assert action in self.actions(state)
+        workingState = state.get_map().splitlines() # use getter methods to receive data
+        dynamicBoxes = state.get_dict()
+        newState = [list(line) for line in workingState]
+        boxesCurrent = list(find_2D_iterator(workingState, '$'))
+        try:
+            workerCurrent = next(find_2D_iterator(workingState, '@'))
+        except StopIteration:
+            try:
+                workerCurrent = next(find_2D_iterator(workingState, '!'))
+            except:
+                raise ValueError("No worker found in the given state.")
+        offset = directionToOffset(action)
+        newCoord = tuple(a + b for a, b in zip(workerCurrent, offset))
+        occupant = findOccupant(newState, newCoord)
+    
+        if occupant == '$':
+            boxIndex = boxesCurrent.index(newCoord)
+            newBoxPosition = tuple(a + b for a, b in zip(newCoord, offset))
+            for box in dynamicBoxes:
+                if box['coord'] == newCoord:
+                    box['coord'] = newBoxPosition
+            # Clear the original box position
+            newState[boxesCurrent[boxIndex][1]][boxesCurrent[boxIndex][0]] = ' ' if newState[boxesCurrent[boxIndex][1]][boxesCurrent[boxIndex][0]] == '$' else newState[boxesCurrent[boxIndex][1]][boxesCurrent[boxIndex][0]]
+            # Place box at new position
+            newState[newBoxPosition[1]][newBoxPosition[0]] = '$'
+        
+        # Case for when a worker moves off a target
+        if newState[workerCurrent[1]][workerCurrent[0]] == '!':
+            newState[workerCurrent[1]][workerCurrent[0]] = '.'
+        else:
+            newState[workerCurrent[1]][workerCurrent[0]] = ' '
+        
+        # Place worker at new position
+        if newState[newCoord[1]][newCoord[0]] == '.':
+            newState[newCoord[1]][newCoord[0]] = '!'
+        else:
+            newState[newCoord[1]][newCoord[0]] = '@'
+    
+        newState = [''.join(line) for line in newState]
+        return HashableState(("\n".join(newState), dynamicBoxes)) # return state as HashableState
 
+
+            
     def goal_test(self, state):
-        _, boxes = state
-        return all((b[0], b[1]) in self.targets for b in boxes)
+        # Extract and sort the boxes positions from the state
+        state = state.get_map().splitlines()
+        boxes = parseState(state)
+        
+    
+        # Check if sorted boxes match the sorted goal
+        return sorted(boxes, key=lambda x: (x[1], x[0])) == self.goal
+    
+    def path_cost(self, c, state1, action, state2, moves_by_worker = None):
+        # Retrieve box positions and weights from both states
+        box_map1 = {box['id']: box for box in state1.get_dict()}
+        box_map2 = {box['id']: box for box in state2.get_dict()}
+    
+        # Every action has at least a cost of 1
+        c += 1
+    
+        # Find how far each box moved
+        for id, box1 in box_map1.items():
+            box2 = box_map2[id]
+            if box1['coord'] != box2['coord']:
+                # Calculate the Manhattan distance the box moved
+                distance = manhattanDistance(box1['coord'], box2['coord'])
+                # Compute the cost of moving this box based on its weight
+                move_cost = distance * box1['weight']
+                c += move_cost
+        if moves_by_worker: 
+            c += moves_by_worker-1 # - 1 to not count the last move twice
+    
+        return c
 
-    def path_cost(self, c, state1, action, state2):
-        _, b1 = state1
-        _, b2 = state2
-        b1_dict = {(b[0], b[1]): (b[0], b[1], b[2]) for b in b1}
-        for (bx, by, w) in b2:
-            if (bx, by) not in b1_dict:
-                return c + 1 + w
-        return c + 1
 
-    def h(self, node):
-        state = node.state
-        box_pos = frozenset((b[0], b[1]) for b in state[1])
-        # Use a lower penalty value.
-        penalty = 10 if box_pos in self._seen_box_configs else 0
-        if not penalty:
-            self._seen_box_configs.add(box_pos)
-        if self.is_deadlock(node.state):
-            return 10**6
-        worker, boxes = node.state
-        box_cost = 0
-        for bx, by, weight in boxes:
-            if (bx, by) in self.targets:
-                continue
-            d = min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets)
-            box_cost += d * (1 + weight * 0.5)
-        return box_cost + penalty
 
-# ---------------------------------------------------------------------
+    
+    def h(self, state):
+        boxes = parseState(state.state.get_map().splitlines())
+        dynamicBoxes = state.state.get_dict()
+        total_cost = 0
+        for box in boxes:
+            closest_target_distance = float('inf')
+            for target in self.targets:
+                distance = manhattanDistance(box, target)
+                if distance < closest_target_distance:
+                    closest_target_distance = distance
+            # find weight of given box
+            for checkBox in dynamicBoxes:
+                if checkBox['coord'] == box:
+                    weight = checkBox['weight']
+                    
+            total_cost += closest_target_distance * weight
+        return total_cost
+
+        
+            
+            
+            
+        
+        
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 def check_elem_action_seq(warehouse, action_seq):
-    warehouse_copy = warehouse.copy()
-    worker_x, worker_y = warehouse_copy.worker
-    boxes = set(warehouse_copy.boxes)
-    walls = set(warehouse_copy.walls)
-    for action in action_seq:
-        if action not in MOVES:
-            return "Impossible"
-        dx, dy = MOVES[action]
-        new_worker_x, new_worker_y = worker_x + dx, worker_y + dy
-        if (new_worker_x, new_worker_y) in walls:
-            return "Impossible"
-        if (new_worker_x, new_worker_y) in boxes:
-            new_box_x, new_box_y = new_worker_x + dx, new_worker_y + dy
-            if (new_box_x, new_box_y) in walls or (new_box_x, new_box_y) in boxes:
-                return "Impossible"
-            boxes.remove((new_worker_x, new_worker_y))
-            boxes.add((new_box_x, new_box_y))
-        worker_x, worker_y = new_worker_x, new_worker_y
-    warehouse_copy.worker = (worker_x, worker_y)
-    warehouse_copy.boxes = tuple(boxes)
-    return str(warehouse_copy)
+    '''
+    Determine if the sequence of actions listed in 'action_seq' is legal or not.
+    
+    @param warehouse: a valid Warehouse object
+    @param action_seq: a sequence of legal actions.
+    
+    @return:
+        The string 'Impossible', if one of the action was not valid.
+        Otherwise, a string representing the state of the puzzle after applying the sequence of actions.
+    '''
+    # create a copy of the warehouse to ensure no changes happen to the original
+    warehouse = warehouse.copy()
+    x, y = warehouse.worker
+    
+    for move in action_seq:
+        # movement directions
+        dx, dy = 0, 0
+        if move == 'Up': dy = -1
+        elif move == 'Down': dy = 1
+        elif move == 'Left': dx = -1
+        elif move == 'Right': dx = 1
+        else: raise ValueError('Invalid move:', move)
+        
+        # Calculate new positions
+        x_move = x + dx
+        y_move = y + dy
+        
+        # Check if the new worker position is a wall
+        if (x_move, y_move) in warehouse.walls:
+            return 'Impossible'
+        
+        # Check if the new position has a box
+        if (x_move, y_move) in warehouse.boxes:
+            new_box_x = x_move + dx
+            new_box_y = y_move + dy
+            # Check if the new box position is valid
+            if (new_box_x, new_box_y) in warehouse.walls or (new_box_x, new_box_y) in warehouse.boxes:
+                return 'Impossible'
+            # Move the box
+            warehouse.boxes.remove((x_move, y_move))
+            warehouse.boxes.append((new_box_x, new_box_y))
+        
+        # Update the worker position
+        x, y = x_move, y_move
+    
+    # Update the worker position in the warehouse
+    warehouse.worker = (x, y)
+    # Return the new warehouse state as a string
+    return str(warehouse)
 
-# ---------------------------------------------------------------------
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 def solve_weighted_sokoban(warehouse):
-    if all((b[0], b[1]) in warehouse.targets for b in warehouse.boxes):
-        return [], 0
+    '''
+    This function analyses the given warehouse.
+    It returns the two items. The first item is an action sequence solution. 
+    The second item is the total cost of this action sequence.
+    
+    @param 
+     warehouse: a valid Warehouse object
+
+    @return
+    
+        If puzzle cannot be solved 
+            return 'Impossible', None
+        
+        If a solution was found, 
+            return S, C 
+            where S is a list of actions that solves
+            the given puzzle coded with 'Left', 'Right', 'Up', 'Down'
+            For example, ['Left', 'Down', Down','Right', 'Up', 'Down']
+            If the puzzle is already in a goal state, simply return []
+            C is the total cost of the action sequence C
+
+    '''
+    t0 = time.time()
     problem = SokobanPuzzle(warehouse)
-    result = search.astar_graph_search(problem)
-    if result is None:
-        return ['Impossible'], None
-    return result.solution(), result.path_cost
+    solution = search.astar_graph_search(problem)
+    
+    if solution is None:
+        return 'Impossible', None
+    
+    actions = [node.action for node in solution.path()[1:]]  # Extract actions
+    if check_elem_action_seq(warehouse, actions) == 'Impossible':
+        return 'Impossible', None
+
+    # Ensure to extract the state properly to pass to path_cost if needed
+    final_state = solution.state  # Make sure this extracts the string representation
+    moves_by_worker = len(actions)
+    cost = problem.path_cost(0, problem.initial, None, final_state, moves_by_worker)
+    t1 = time.time()
+    print("Solver took ",t1-t0, ' seconds')
+    
+    return actions, cost
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
