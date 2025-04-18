@@ -261,15 +261,6 @@ class TestSokoban:
             print('Your answer is different but it might still be correct')
             print('Check that you pushed the right box onto the left target!')
         print(f'Your cost = {cost}, expected cost = {expected_cost}')
-
-
-
-    
-    
-    
-    
-    
-    
     
     @pytest.mark.skip("Not implemented")
     def test_solve_weighted_sokoban_wh5n(self):
@@ -290,6 +281,3 @@ class TestSokoban:
             print('Your answer is different but it might still be correct')
             print('Check that you pushed the right box onto the left target!')
         print(f'Your cost = {cost}, expected cost = {expected_cost}')
-
-
-    
