@@ -53,19 +53,18 @@ def find_2D_iterator_exclude(lines, *exclude_chars):
             yield (x, y)
 
 def get_corner_taboo_cells(candidate_taboo_cells, wall_cells):
-    # Determine which candidate cells (inside the warehouse) are corners.
-    corner_taboo_cells = set()
-    for candidate in candidate_taboo_cells:
-        x, y = candidate
-        north = (x, y - 1)
-        east  = (x + 1, y)
-        south = (x, y + 1)
-        west  = (x - 1, y)
-        # A cell is a corner if two adjacent orthogonal neighbours are walls.
-        if ((north in wall_cells and east in wall_cells) or
-            (east in wall_cells and south in wall_cells) or
-            (south in wall_cells and west in wall_cells) or
-            (west in wall_cells and north in wall_cells)):
+    corner_taboo_cells: set[tuple] = set()
+    for candidate_taboo_cell in candidate_taboo_cells:
+        x, y = candidate_taboo_cell
+        north = x, y - 1
+        east = x + 1, y
+        south = x, y + 1
+        west = x - 1, y
+
+        if (north in wall_cells and east in wall_cells) or \
+        (east in wall_cells and south in wall_cells) or \
+        (south in wall_cells and west in wall_cells) or \
+        (west in wall_cells and north in wall_cells):
             corner_taboo_cells.add((x, y))
     return corner_taboo_cells
 
@@ -105,8 +104,8 @@ def get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells):
                         wall_taboo_cells.add((x, y1))
     return wall_taboo_cells
 
+
 def get_taboo_cell_map(warehouse, taboo_cells):
-    # Create a visual map indicating taboo cells with 'X' and walls with '#'.
     lines = [list(line) for line in str(warehouse).split('\n')]
     for i, line in enumerate(lines):
         for j in range(len(line)):
@@ -114,35 +113,81 @@ def get_taboo_cell_map(warehouse, taboo_cells):
                 line[j] = 'X'
             elif line[j] not in {'#', ' '}:
                 line[j] = ' '
-    return "\n".join("".join(line) for line in lines)
 
-def mark_outside_walls(s):
-    # Mark positions outside the first and last wall for proper analysis.
-    first = s.find('#')
-    last = s.rfind('#')
-    if first == -1 or last == -1:
-        return s  
-    return '?' * first + s[first:last + 1] + '?' * (len(s) - last - 1)
+    taboo_cell_map = "\n".join("".join(line) for line in lines)
+    return taboo_cell_map
+
+def get_interior_cells(warehouse):
+    """ Use BFS from the worker to identify cells inside the warehouse. """
+    lines = [list(line) for line in str(warehouse).split('\n')]
+    height = len(lines)
+    width = max(len(line) for line in lines)
+
+    walls = set(warehouse.walls)
+    visited = set()
+    queue = deque()
+    
+    # Start BFS from the worker position
+    start = warehouse.worker
+    if start in walls:
+        return set()  # Fail-safe: worker embedded in a wall?
+
+    queue.append(start)
+    visited.add(start)
+
+    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+    while queue:
+        x, y = queue.popleft()
+        for dx, dy in directions:
+            nx, ny = x + dx, y + dy
+            if 0 <= ny < height and 0 <= nx < len(lines[ny]):
+                if (nx, ny) not in walls and (nx, ny) not in visited:
+                    visited.add((nx, ny))
+                    queue.append((nx, ny))
+
+    return visited
 
 def taboo_cells(warehouse):
     '''  
-    Identify taboo cells in a warehouse based on two simple rules:
-      Rule 1: A non-target cell that is a corner is taboo.
-      Rule 2: Cells in between two corners along a wall are taboo if none is a target.
-    @param warehouse: a Warehouse object.
-    @return: A string representation with walls '#' and taboo cells 'X'.
+    Identify the taboo cells of a warehouse. A "taboo cell" is by definition
+    a cell inside a warehouse such that whenever a box get pushed on such 
+    a cell then the puzzle becomes unsolvable. 
+    
+    Cells outside the warehouse are not taboo. It is a fail to tag one as taboo.
+    
+    When determining the taboo cells, you must ignore all the existing boxes, 
+    only consider the walls and the target  cells.  
+    Use only the following rules to determine the taboo cells;
+     Rule 1: if a cell is a corner and not a target, then it is a taboo cell.
+     Rule 2: all the cells between two corners along a wall are taboo if none of 
+             these cells is a target.
+    
+    @param warehouse: 
+        a Warehouse object with a worker inside the warehouse
+
+    @return
+       A string representing the warehouse with only the wall cells marked with 
+       a '#' and the taboo cells marked with a 'X'.  
+       The returned string should NOT have marks for the worker, the targets,
+       and the boxes.  
     '''
     lines = str(warehouse).split('\n')
     wall_cells = set(warehouse.walls)
+    interior_cells = get_interior_cells(warehouse)
+
     taboo_row_nullifier = set(warehouse.targets) | set(find_2D_iterator(lines, '*')) | set(find_2D_iterator(lines, '#'))
-    lines = [mark_outside_walls(line) for line in lines]
     candidate_taboo_cells = set(find_2D_iterator_exclude(lines, '.', '#', '*', '?'))
-    
+
+    candidate_taboo_cells &= interior_cells
+
     corner_taboo_cells = get_corner_taboo_cells(candidate_taboo_cells, wall_cells)
     wall_taboo_cells = get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells)
-    all_taboo_cells = corner_taboo_cells | wall_taboo_cells
-    
-    return get_taboo_cell_map(warehouse, all_taboo_cells)
+    taboo_cells = (corner_taboo_cells | wall_taboo_cells) & interior_cells
+
+    taboo_cell_map = get_taboo_cell_map(warehouse, taboo_cells)
+
+    return taboo_cell_map
 
 # -----------------------------------------------------------------------------
 def get_reachable_positions(worker_pos, walls, boxes):

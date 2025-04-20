@@ -72,6 +72,21 @@ class TestSokoban:
         answer = taboo_cells(wh)
         assert answer == expected_answer
 
+    def test_taboo_cells_wh_5n(self):
+        wh = Warehouse()
+        wh.load_warehouse("./warehouses/warehouse_5n.txt")
+        expected_answer = (
+            ' #### #### \n'
+            '##XX###XX##\n'
+            '#X  #X#  X#\n'
+            '#X       X#\n'
+            '###     ###\n'
+            ' #XXXXXXX# \n'
+            '###########'
+        )
+        answer = taboo_cells(wh)
+        assert answer == expected_answer
+
     def test_check_elem_action_seq_wh_1(self):
         wh = Warehouse()
         wh.load_warehouse("./warehouses/warehouse_01.txt")
@@ -212,7 +227,6 @@ class TestSokoban:
         print(f'Your cost = {cost}, expected cost = {expected_cost}')
 
     
-    #@pytest.mark.skip
     def test_solve_weighted_sokoban_wh7(self):
         wh = Warehouse()    
         wh.load_warehouse( "./warehouses/warehouse_07.txt")
@@ -233,7 +247,6 @@ class TestSokoban:
             print('Check that you pushed the right box onto the left target!')
         print(f'Your cost = {cost}, expected cost = {expected_cost}')
 
-    @pytest.mark.skip("takes ages to run")
     def test_solve_weighted_sokoban_wh147(self):
         wh = Warehouse()    
         wh.load_warehouse( "./warehouses/warehouse_147.txt")
@@ -262,7 +275,6 @@ class TestSokoban:
             print('Check that you pushed the right box onto the left target!')
         print(f'Your cost = {cost}, expected cost = {expected_cost}')
     
-    @pytest.mark.skip("Not implemented")
     def test_solve_weighted_sokoban_wh5n(self):
         wh = Warehouse()    
         wh.load_warehouse( "./warehouses/warehouse_5n.txt")
