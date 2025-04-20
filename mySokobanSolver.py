@@ -75,33 +75,31 @@ def get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells):
         x1, y1 = corner1
         x2, y2 = corner2
         if x1 == x2:  # Vertical alignment.
-            if ((x1, y1 - 1) in wall_cells and (x1, y2 + 1) in wall_cells):
-                min_y, max_y = min(y1, y2), max(y1, y2)
-                is_valid = True
+            min_y, max_y = min(y1, y2), max(y1, y2)
+            is_valid = True
+            for y in range(min_y + 1, max_y):
+                if (x1, y) in taboo_row_nullifier:
+                    is_valid = False
+                    break
+                if (x1 - 1, y) not in wall_cells and (x1 + 1, y) not in wall_cells:
+                    is_valid = False
+                    break
+            if is_valid:
                 for y in range(min_y + 1, max_y):
-                    if (x1, y) in taboo_row_nullifier:
-                        is_valid = False
-                        break
-                    if (x1 - 1, y) not in wall_cells and (x1 + 1, y) not in wall_cells:
-                        is_valid = False
-                        break
-                if is_valid:
-                    for y in range(min_y + 1, max_y):
-                        wall_taboo_cells.add((x1, y))
+                    wall_taboo_cells.add((x1, y))
         elif y1 == y2:  # Horizontal alignment.
-            if ((x1 - 1, y1) in wall_cells and (x2 + 1, y1) in wall_cells):
-                min_x, max_x = min(x1, x2), max(x1, x2)
-                is_valid = True
+            min_x, max_x = min(x1, x2), max(x1, x2)
+            is_valid = True
+            for x in range(min_x + 1, max_x):
+                if (x, y1) in taboo_row_nullifier:
+                    is_valid = False
+                    break
+                if (x, y1 - 1) not in wall_cells and (x, y1 + 1) not in wall_cells:
+                    is_valid = False
+                    break
+            if is_valid:
                 for x in range(min_x + 1, max_x):
-                    if (x, y1) in taboo_row_nullifier:
-                        is_valid = False
-                        break
-                    if (x, y1 - 1) not in wall_cells and (x, y1 + 1) not in wall_cells:
-                        is_valid = False
-                        break
-                if is_valid:
-                    for x in range(min_x + 1, max_x):
-                        wall_taboo_cells.add((x, y1))
+                    wall_taboo_cells.add((x, y1))
     return wall_taboo_cells
 
 
@@ -121,7 +119,6 @@ def get_interior_cells(warehouse):
     """ Use BFS from the worker to identify cells inside the warehouse. """
     lines = [list(line) for line in str(warehouse).split('\n')]
     height = len(lines)
-    width = max(len(line) for line in lines)
 
     walls = set(warehouse.walls)
     visited = set()
@@ -260,24 +257,6 @@ class SokobanPuzzle(search.Problem):
 
     def __hash__(self):
         return hash(self.initial)
-    
-    def is_box_blocked(self, box_positions, box):
-        # Check whether a given box is blocked on two adjacent sides by walls or other boxes.
-        x, y = box
-        obstacles = self.walls.union(box_positions - {(x, y)})
-        if ((x - 1, y) in obstacles and (x, y - 1) in obstacles): return True
-        if ((x + 1, y) in obstacles and (x, y - 1) in obstacles): return True
-        if ((x - 1, y) in obstacles and (x, y + 1) in obstacles): return True
-        if ((x + 1, y) in obstacles and (x, y + 1) in obstacles): return True
-        return False
-
-    def has_frozen_clusters(self, box_positions):
-        # Check if any two adjacent boxes are mutually blocked.
-        for b1, b2 in combinations(box_positions, 2):
-            if abs(b1[0] - b2[0]) + abs(b1[1] - b2[1]) == 1:
-                if self.is_box_blocked(box_positions, b1) and self.is_box_blocked(box_positions, b2):
-                    return True
-        return False
 
     def is_taboo_deadlock(self, state):
         # Return True if any box is on a taboo cell that is not a target.
@@ -291,14 +270,12 @@ class SokobanPuzzle(search.Problem):
         # Check and cache deadlock states.
         _, boxes = state
         box_positions = frozenset((b[0], b[1]) for b in boxes)
+
         if box_positions in self.deadlock_cache:
             return self.deadlock_cache[box_positions]
+
         if any((bx, by) in self.taboo_set and (bx, by) not in self.targets for bx, by, _ in boxes):
             self.deadlock_cache[box_positions] = True
-            return True
-        if any(self.is_box_blocked(box_positions, (bx, by)) for bx, by, _ in boxes):
-            return True
-        if self.has_frozen_clusters(box_positions):
             return True
         return False
 
@@ -364,21 +341,11 @@ class SokobanPuzzle(search.Problem):
             return c + 1 + moved_box[2]
         return c + 1
 
-    def h(self, node):
-        # Heuristic: Weighted Manhattan distance from boxes to targets,
-        # plus a penalty for repeated box configurations.
-        state = node.state
-        box_pos = frozenset((b[0], b[1]) for b in state[1])
-        if box_pos in self._seen_box_configs:
-            penalty = 100  
-        else:
-            penalty = 0
-            self._seen_box_configs.add(box_pos)
-        
+    def h(self, node):        
         if self.is_deadlock(node.state):
-            return 10**6
+            return float('inf')
 
-        worker, boxes = node.state
+        _, boxes = node.state
         box_cost = 0
         for bx, by, weight in boxes:
             if (bx, by) in self.targets:
@@ -387,7 +354,7 @@ class SokobanPuzzle(search.Problem):
             d = self.target_distance.get((bx, by), 
                   min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets))
             box_cost += d * (1 + weight * 0.5)
-        return box_cost + penalty
+        return box_cost
 
 # -----------------------------------------------------------------------------
 def check_elem_action_seq(warehouse, action_seq):

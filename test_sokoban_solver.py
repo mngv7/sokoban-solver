@@ -87,6 +87,22 @@ class TestSokoban:
         answer = taboo_cells(wh)
         assert answer == expected_answer
 
+    def test_taboo_cells_wh_07(self):
+        wh = Warehouse()
+        wh.load_warehouse("./warehouses/warehouse_07.txt")
+        expected_answer = (
+            '#######\n'
+            '#XXXXX#\n'
+            '#X   X#\n'
+            '#X   X#\n'
+            '#X   X#\n'
+            '#X   X#\n'
+            '#XXXXX#\n'
+            '#######'
+        )
+        answer = taboo_cells(wh)
+        assert answer == expected_answer
+
     def test_check_elem_action_seq_wh_1(self):
         wh = Warehouse()
         wh.load_warehouse("./warehouses/warehouse_01.txt")
