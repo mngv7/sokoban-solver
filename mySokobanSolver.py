@@ -266,19 +266,6 @@ class SokobanPuzzle(search.Problem):
                 return True
         return False
 
-    def is_deadlock(self, state):
-        # Check and cache deadlock states.
-        _, boxes = state
-        box_positions = frozenset((b[0], b[1]) for b in boxes)
-
-        if box_positions in self.deadlock_cache:
-            return self.deadlock_cache[box_positions]
-
-        if any((bx, by) in self.taboo_set and (bx, by) not in self.targets for bx, by, _ in boxes):
-            self.deadlock_cache[box_positions] = True
-            return True
-        return False
-
     def actions(self, state):
         # Generate legal actions from the current state.
         if self.is_taboo_deadlock(state) and state != self.initial:
@@ -298,7 +285,8 @@ class SokobanPuzzle(search.Problem):
                 continue
             if (nx, ny) in boxes_xy:
                 bnx, bny = nx + dx, ny + dy
-                if (bnx, bny) in self.walls or (bnx, bny) in boxes_xy:
+                if (bnx, bny) in self.walls or (bnx, bny) in boxes_xy or (bnx, bny) in self.taboo_set:
+                # if (bnx, bny) in self.walls or (bnx, bny) in boxes_xy:
                     continue
                 if (wx, wy) in reachable:  # must be able to reach the pushing position
                     legal_actions.append(action)
@@ -341,10 +329,7 @@ class SokobanPuzzle(search.Problem):
             return c + 1 + moved_box[2]
         return c + 1
 
-    def h(self, node):        
-        if self.is_deadlock(node.state):
-            return float('inf')
-
+    def h(self, node):
         _, boxes = node.state
         box_cost = 0
         for bx, by, weight in boxes:

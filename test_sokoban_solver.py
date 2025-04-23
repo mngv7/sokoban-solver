@@ -103,6 +103,42 @@ class TestSokoban:
         answer = taboo_cells(wh)
         assert answer == expected_answer
 
+    def test_taboo_cells_wh_59(self):
+        wh = Warehouse()
+        wh.load_warehouse("./warehouses/warehouse_59.txt")
+        expected_answer = (
+            '############ \n'
+            '#XXXXXXXXXX# \n'
+            '#X#######  ##\n'
+            '#X#X       X#\n'
+            '#X#     X#  #\n'
+            '#X   #####  #\n'
+            '###XX# #X   #\n'
+            '  #### #XXXX#\n'
+            '       ######'
+        )
+        answer = taboo_cells(wh)
+        assert answer == expected_answer
+
+    def test_taboo_cells_wh_6n(self):
+        wh = Warehouse()
+        wh.load_warehouse("./warehouses/warehouse_6n.txt")
+        expected_answer = (
+            ' #### #### \n'
+            '##XX###XX##\n'
+            '#X  #X#  X#\n'
+            '#X       X#\n'
+            '###     ###\n'
+            ' #X     X# \n'
+            '###     X# \n'
+            '#X      X# \n'
+            '#X  #XXX## \n'
+            '##XX####   \n'
+            ' ####      '
+        )
+        answer = taboo_cells(wh)
+        assert answer == expected_answer
+
     def test_check_elem_action_seq_wh_1(self):
         wh = Warehouse()
         wh.load_warehouse("./warehouses/warehouse_01.txt")
@@ -309,3 +345,10 @@ class TestSokoban:
             print('Your answer is different but it might still be correct')
             print('Check that you pushed the right box onto the left target!')
         print(f'Your cost = {cost}, expected cost = {expected_cost}')
+
+    def test_solve_weighted_sokoban_wh59(self):
+        wh = Warehouse()    
+        wh.load_warehouse( "./warehouses/warehouse_59.txt")
+        answer, cost = solve_weighted_sokoban(wh)
+
+        print(f'\nPath:{answer}\n Cost: {cost}')
