@@ -43,16 +43,25 @@ def my_team():
 from sokoban import find_2D_iterator
 
 def find_1D_iterator_exclude(line, *exclude_chars):
+    '''
+    Returns positions in a string that don't match excluded characters
+    '''    
     for pos, char in enumerate(line):
         if char not in exclude_chars:
             yield pos
 
 def find_2D_iterator_exclude(lines, *exclude_chars):
+    '''
+    Returns (x, y) positions in a grid that don't match excluded characters.
+    '''
     for y, line in enumerate(lines):
         for x in find_1D_iterator_exclude(line, *exclude_chars):
             yield (x, y)
 
 def get_corner_taboo_cells(candidate_taboo_cells, wall_cells):
+    '''
+    Returns corner cells that are taboo based on adjacent walls
+    '''
     corner_taboo_cells: set[tuple] = set()
     for candidate_taboo_cell in candidate_taboo_cells:
         x, y = candidate_taboo_cell
@@ -69,7 +78,9 @@ def get_corner_taboo_cells(candidate_taboo_cells, wall_cells):
     return corner_taboo_cells
 
 def get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells):
-    # Determine additional taboo cells between pairs of corners along walls.
+    '''
+    Returns additional taboo cells along walls between taboo corners
+    '''
     wall_taboo_cells = set()
     for corner1, corner2 in combinations(corner_taboo_cells, 2):
         x1, y1 = corner1
@@ -104,6 +115,9 @@ def get_wall_taboo_cells(corner_taboo_cells, taboo_row_nullifier, wall_cells):
 
 
 def get_taboo_cell_map(warehouse, taboo_cells):
+    '''
+    Returns a string-based map marking taboo cells with 'X'
+    '''
     lines = [list(line) for line in str(warehouse).split('\n')]
     for i, line in enumerate(lines):
         for j in range(len(line)):
@@ -116,7 +130,9 @@ def get_taboo_cell_map(warehouse, taboo_cells):
     return taboo_cell_map
 
 def get_interior_cells(warehouse):
-    """ Use BFS from the worker to identify cells inside the warehouse. """
+    ''' 
+    Use BFS from the worker to identify cells inside the warehouse.
+    '''
     lines = [list(line) for line in str(warehouse).split('\n')]
     height = len(lines)
 
@@ -215,7 +231,7 @@ class SokobanPuzzle(search.Problem):
         self.warehouse = warehouse
         self.walls = set(warehouse.walls)
         self.targets = set(warehouse.targets)
-        self.visited_box_states = set()
+        #self.visited_box_states = set()
         self.deadlock_cache = {}
         
         # Represent each box as (x, y, weight) tuple. Sort to get a canonical state.
@@ -224,8 +240,8 @@ class SokobanPuzzle(search.Problem):
         boxes_with_weights.sort(key=lambda b: (b[1], b[0]))
         self.initial = (warehouse.worker, tuple(boxes_with_weights))
         
-        if not hasattr(self, '_seen_box_configs'):
-            self._seen_box_configs = set()
+        # if not hasattr(self, '_seen_box_configs'):
+        #     self._seen_box_configs = set()
         
         # Compute taboo cells from warehouse configuration.
         taboo_map = taboo_cells(warehouse)
@@ -275,7 +291,7 @@ class SokobanPuzzle(search.Problem):
         (wx, wy), boxes = state
         boxes_xy = {(b[0], b[1]) for b in boxes}
         reachable = get_reachable_positions((wx, wy), self.walls, boxes_xy)
-        self.last_reachable_cache = reachable 
+        # self.last_reachable_cache = reachable 
         moves = {'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1)}
         legal_actions = []
         for action in directions:
@@ -338,7 +354,7 @@ class SokobanPuzzle(search.Problem):
             # Use precomputed target distance if available.
             d = self.target_distance.get((bx, by), 
                   min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets))
-            box_cost += d * (1 + weight * 0.5)
+            box_cost += d * (1 + weight)
         return box_cost
 
 # -----------------------------------------------------------------------------
