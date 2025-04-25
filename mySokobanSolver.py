@@ -354,7 +354,7 @@ class SokobanPuzzle(search.Problem):
             # Use precomputed target distance if available.
             d = self.target_distance.get((bx, by), 
                   min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets))
-            box_cost += d * (1 + weight * 0.5)
+            box_cost += d * (1 + weight)
         return box_cost
 
 # -----------------------------------------------------------------------------
