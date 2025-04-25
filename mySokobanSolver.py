@@ -220,6 +220,7 @@ def get_reachable_positions(worker_pos, walls, boxes):
     return visited
 
 # -----------------------------------------------------------------------------
+
 class SokobanPuzzle(search.Problem):
     '''
     An instance of SokobanPuzzle represents a weighted Sokoban puzzle.
@@ -231,67 +232,35 @@ class SokobanPuzzle(search.Problem):
         self.warehouse = warehouse
         self.walls = set(warehouse.walls)
         self.targets = set(warehouse.targets)
-        #self.visited_box_states = set()
         self.deadlock_cache = {}
-        
-        # Represent each box as (x, y, weight) tuple. Sort to get a canonical state.
+
         boxes_with_weights = [(box[0], box[1], weight)
                               for box, weight in zip(warehouse.boxes, warehouse.weights)]
         boxes_with_weights.sort(key=lambda b: (b[1], b[0]))
         self.initial = (warehouse.worker, tuple(boxes_with_weights))
-        
-        # if not hasattr(self, '_seen_box_configs'):
-        #     self._seen_box_configs = set()
-        
-        # Compute taboo cells from warehouse configuration.
+
         taboo_map = taboo_cells(warehouse)
         self.taboo_set = {(j, i)
                           for i, line in enumerate(taboo_map.splitlines())
                           for j, ch in enumerate(line)
                           if ch == 'X'}
-        
-        # ---------------------------------------------------------------------
-        # Precompute the target distance map.
-        # For every cell (within the minimal bounding box of walls, targets, worker, and boxes)
-        # that is not a wall, store the minimum Manhattan distance to any target.
-        # This helps accelerate the heuristic evaluation.
-        # ---------------------------------------------------------------------
-        all_cells = self.walls | self.targets | {warehouse.worker} | {(bx, by) for (bx, by, _) in boxes_with_weights}
-        min_x = min(x for x, _ in all_cells)
-        max_x = max(x for x, _ in all_cells)
-        min_y = min(y for _, y in all_cells)
-        max_y = max(y for _, y in all_cells)
-        self.target_distance = {}
-        for x in range(min_x, max_x + 1):
-            for y in range(min_y, max_y + 1):
-                if (x, y) not in self.walls:
-                    # Compute minimal Manhattan distance from (x,y) to any target.
-                    self.target_distance[(x, y)] = min(abs(x - tx) + abs(y - ty) for (tx, ty) in self.targets)
-    
+
+        # Memoized function to compute minimum target distance for any cell
+        self.compute_min_target_distance = search.memoize(
+            lambda bx, by: min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets)
+        )
+
     def __eq__(self, other):
         return isinstance(other, SokobanPuzzle) and self.initial == other.initial
 
     def __hash__(self):
         return hash(self.initial)
 
-    def is_taboo_deadlock(self, state):
-        # Return True if any box is on a taboo cell that is not a target.
-        _, boxes = state
-        for bx, by, _ in boxes:
-            if (bx, by) in self.taboo_set and (bx, by) not in self.targets:
-                return True
-        return False
-
     def actions(self, state):
-        # Generate legal actions from the current state.
-        if self.is_taboo_deadlock(state) and state != self.initial:
-            return []
-        
         directions = ['Up', 'Down', 'Left', 'Right']
         (wx, wy), boxes = state
         boxes_xy = {(b[0], b[1]) for b in boxes}
         reachable = get_reachable_positions((wx, wy), self.walls, boxes_xy)
-        # self.last_reachable_cache = reachable 
         moves = {'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1)}
         legal_actions = []
         for action in directions:
@@ -302,9 +271,8 @@ class SokobanPuzzle(search.Problem):
             if (nx, ny) in boxes_xy:
                 bnx, bny = nx + dx, ny + dy
                 if (bnx, bny) in self.walls or (bnx, bny) in boxes_xy or (bnx, bny) in self.taboo_set:
-                # if (bnx, bny) in self.walls or (bnx, bny) in boxes_xy:
                     continue
-                if (wx, wy) in reachable:  # must be able to reach the pushing position
+                if (wx, wy) in reachable:
                     legal_actions.append(action)
             else:
                 if (nx, ny) in reachable:
@@ -312,26 +280,22 @@ class SokobanPuzzle(search.Problem):
         return legal_actions
 
     def result(self, state, action):
-        # Compute the new state after applying an action.
         (wx, wy), boxes = state
         boxes = list(boxes)
         dx, dy = {'Left': (-1, 0), 'Right': (1, 0), 'Up': (0, -1), 'Down': (0, 1)}[action]
         new_worker = (wx + dx, wy + dy)
         for i, (bx, by, w) in enumerate(boxes):
             if (bx, by) == new_worker:
-                # Push the box if present.
                 new_box = (bx + dx, by + dy, w)
                 boxes[i] = new_box
                 break
         return (new_worker, tuple(sorted(boxes, key=lambda b: (b[1], b[0]))))
 
     def goal_test(self, state):
-        # Puzzle is solved when every box is on a target.
         _, boxes = state
         return all((b[0], b[1]) in self.targets for b in boxes)
 
     def path_cost(self, c, state1, action, state2):
-        # The cost is 1 per move plus an extra cost proportional to the weight of any moved box.
         _, b1 = state1
         _, b2 = state2
         moved_box = None
@@ -351,11 +315,10 @@ class SokobanPuzzle(search.Problem):
         for bx, by, weight in boxes:
             if (bx, by) in self.targets:
                 continue
-            # Use precomputed target distance if available.
-            d = self.target_distance.get((bx, by), 
-                  min(abs(bx - tx) + abs(by - ty) for (tx, ty) in self.targets))
+            d = self.compute_min_target_distance(bx, by)
             box_cost += d * (1 + weight)
         return box_cost
+
 
 # -----------------------------------------------------------------------------
 def check_elem_action_seq(warehouse, action_seq):
